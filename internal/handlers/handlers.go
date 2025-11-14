@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/ThraaxSession/gintainer/internal/caddy"
@@ -26,8 +27,11 @@ func NewHandler(runtimeManager *runtime.Manager, caddyService *caddy.Service) *H
 
 // ListContainers handles GET /api/containers
 func (h *Handler) ListContainers(c *gin.Context) {
+	log.Printf("[INFO] ListContainers: Received request from %s", c.ClientIP())
+	
 	var filters models.FilterOptions
 	if err := c.ShouldBindQuery(&filters); err != nil {
+		log.Printf("[ERROR] ListContainers: Failed to bind query parameters: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -36,6 +40,9 @@ func (h *Handler) ListContainers(c *gin.Context) {
 	if filters.Runtime == "" {
 		filters.Runtime = "all"
 	}
+
+	log.Printf("[INFO] ListContainers: Filters applied - Runtime: %s, Status: %s, Name: %s", 
+		filters.Runtime, filters.Status, filters.Name)
 
 	var allContainers []models.ContainerInfo
 
@@ -46,6 +53,7 @@ func (h *Handler) ListContainers(c *gin.Context) {
 			containers, err := rt.ListContainers(c.Request.Context(), filters)
 			if err != nil {
 				// Log error but continue with other runtimes
+				log.Printf("[WARN] ListContainers: Error querying runtime: %v", err)
 				continue
 			}
 			allContainers = append(allContainers, containers...)
@@ -54,18 +62,21 @@ func (h *Handler) ListContainers(c *gin.Context) {
 		// Query specific runtime
 		rt, ok := h.runtimeManager.GetRuntime(filters.Runtime)
 		if !ok {
+			log.Printf("[ERROR] ListContainers: Invalid runtime specified: %s", filters.Runtime)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 			return
 		}
 
 		containers, err := rt.ListContainers(c.Request.Context(), filters)
 		if err != nil {
+			log.Printf("[ERROR] ListContainers: Failed to list containers: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		allContainers = containers
 	}
 
+	log.Printf("[INFO] ListContainers: Successfully retrieved %d containers", len(allContainers))
 	c.JSON(http.StatusOK, gin.H{"containers": allContainers})
 }
 
@@ -108,25 +119,37 @@ func (h *Handler) DeleteContainer(c *gin.Context) {
 	runtimeName := c.Query("runtime")
 	force := c.Query("force") == "true"
 
+	log.Printf("[INFO] DeleteContainer: Request to delete container %s (runtime: %s, force: %v)", 
+		containerID, runtimeName, force)
+
 	if runtimeName == "" {
+		log.Printf("[ERROR] DeleteContainer: Runtime parameter missing")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
 		return
 	}
 
 	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
 	if !ok {
+		log.Printf("[ERROR] DeleteContainer: Invalid runtime: %s", runtimeName)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 		return
 	}
 
 	if err := rt.DeleteContainer(c.Request.Context(), containerID, force); err != nil {
+		log.Printf("[ERROR] DeleteContainer: Failed to delete container %s: %v", containerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[INFO] DeleteContainer: Successfully deleted container %s", containerID)
+
 	// Remove Caddy configuration if enabled
 	if h.caddyService != nil && h.caddyService.IsEnabled() {
-		_ = h.caddyService.DeleteCaddyfile(c.Request.Context(), containerID)
+		if err := h.caddyService.DeleteCaddyfile(c.Request.Context(), containerID); err != nil {
+			log.Printf("[WARN] DeleteContainer: Failed to delete Caddyfile for %s: %v", containerID, err)
+		} else {
+			log.Printf("[INFO] DeleteContainer: Removed Caddyfile for container %s", containerID)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "container deleted successfully"})
@@ -157,21 +180,28 @@ func (h *Handler) StartContainer(c *gin.Context) {
 	containerID := c.Param("id")
 	runtimeName := c.Query("runtime")
 
+	log.Printf("[INFO] StartContainer: Request to start container %s (runtime: %s)", containerID, runtimeName)
+
 	if runtimeName == "" {
+		log.Printf("[ERROR] StartContainer: Runtime parameter missing")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
 		return
 	}
 
 	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
 	if !ok {
+		log.Printf("[ERROR] StartContainer: Invalid runtime: %s", runtimeName)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 		return
 	}
 
 	if err := rt.StartContainer(c.Request.Context(), containerID); err != nil {
+		log.Printf("[ERROR] StartContainer: Failed to start container %s: %v", containerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	log.Printf("[INFO] StartContainer: Successfully started container %s", containerID)
 
 	// Update Caddy configuration if enabled
 	if h.caddyService != nil && h.caddyService.IsEnabled() {
@@ -180,7 +210,11 @@ func (h *Handler) StartContainer(c *gin.Context) {
 		if err == nil {
 			for _, container := range containers {
 				if container.ID == containerID {
-					_ = h.caddyService.GenerateCaddyfile(c.Request.Context(), container)
+					if err := h.caddyService.GenerateCaddyfile(c.Request.Context(), container); err != nil {
+						log.Printf("[WARN] StartContainer: Failed to generate Caddyfile: %v", err)
+					} else {
+						log.Printf("[INFO] StartContainer: Generated Caddyfile for container %s", containerID)
+					}
 					break
 				}
 			}
@@ -195,25 +229,36 @@ func (h *Handler) StopContainer(c *gin.Context) {
 	containerID := c.Param("id")
 	runtimeName := c.Query("runtime")
 
+	log.Printf("[INFO] StopContainer: Request to stop container %s (runtime: %s)", containerID, runtimeName)
+
 	if runtimeName == "" {
+		log.Printf("[ERROR] StopContainer: Runtime parameter missing")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
 		return
 	}
 
 	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
 	if !ok {
+		log.Printf("[ERROR] StopContainer: Invalid runtime: %s", runtimeName)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 		return
 	}
 
 	if err := rt.StopContainer(c.Request.Context(), containerID); err != nil {
+		log.Printf("[ERROR] StopContainer: Failed to stop container %s: %v", containerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[INFO] StopContainer: Successfully stopped container %s", containerID)
+
 	// Remove Caddy configuration if enabled
 	if h.caddyService != nil && h.caddyService.IsEnabled() {
-		_ = h.caddyService.DeleteCaddyfile(c.Request.Context(), containerID)
+		if err := h.caddyService.DeleteCaddyfile(c.Request.Context(), containerID); err != nil {
+			log.Printf("[WARN] StopContainer: Failed to delete Caddyfile: %v", err)
+		} else {
+			log.Printf("[INFO] StopContainer: Removed Caddyfile for container %s", containerID)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "container stopped successfully"})
@@ -224,22 +269,28 @@ func (h *Handler) RestartContainer(c *gin.Context) {
 	containerID := c.Param("id")
 	runtimeName := c.Query("runtime")
 
+	log.Printf("[INFO] RestartContainer: Request to restart container %s (runtime: %s)", containerID, runtimeName)
+
 	if runtimeName == "" {
+		log.Printf("[ERROR] RestartContainer: Runtime parameter missing")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
 		return
 	}
 
 	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
 	if !ok {
+		log.Printf("[ERROR] RestartContainer: Invalid runtime: %s", runtimeName)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 		return
 	}
 
 	if err := rt.RestartContainer(c.Request.Context(), containerID); err != nil {
+		log.Printf("[ERROR] RestartContainer: Failed to restart container %s: %v", containerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[INFO] RestartContainer: Successfully restarted container %s", containerID)
 	c.JSON(http.StatusOK, gin.H{"message": "container restarted successfully"})
 }
 
@@ -299,8 +350,11 @@ func (h *Handler) RestartPod(c *gin.Context) {
 
 // CreateContainer handles POST /api/containers
 func (h *Handler) CreateContainer(c *gin.Context) {
+	log.Printf("[INFO] CreateContainer: Received container creation request")
+	
 	var req models.CreateContainerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[ERROR] CreateContainer: Invalid request body: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -309,17 +363,22 @@ func (h *Handler) CreateContainer(c *gin.Context) {
 		req.Runtime = "docker"
 	}
 
+	log.Printf("[INFO] CreateContainer: Building image %s using runtime %s", req.ImageName, req.Runtime)
+
 	rt, ok := h.runtimeManager.GetRuntime(req.Runtime)
 	if !ok {
+		log.Printf("[ERROR] CreateContainer: Invalid runtime: %s", req.Runtime)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 		return
 	}
 
 	if err := rt.BuildFromDockerfile(c.Request.Context(), req.Dockerfile, req.ImageName); err != nil {
+		log.Printf("[ERROR] CreateContainer: Failed to build image %s: %v", req.ImageName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[INFO] CreateContainer: Successfully built image %s", req.ImageName)
 	c.JSON(http.StatusOK, gin.H{"message": "image built successfully", "image": req.ImageName})
 }
 
