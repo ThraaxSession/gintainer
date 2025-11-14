@@ -25,6 +25,15 @@
 - Filter patterns for selective updates
 - Enable/disable via API or Web UI
 
+### Caddy Integration
+- Automatic reverse proxy configuration for containers
+- Label-based configuration (caddy.domain, caddy.port, etc.)
+- Automatic Caddyfile generation on container start
+- Automatic Caddyfile removal on container stop/delete
+- Manual Caddyfile management via API
+- Configurable sudo support for Caddy reload
+- Auto-reload on configuration changes
+
 ### Configuration Management
 - YAML-based configuration file (`gintainer.yaml`)
 - Hot-reload with file watching
@@ -99,6 +108,14 @@
 - `GET /api/scheduler/config` - Get scheduler config
 - `PUT /api/scheduler/config` - Update scheduler config
 
+### Caddy Endpoints
+- `GET /api/caddy/status` - Check Caddy integration status
+- `GET /api/caddy/files` - List all Caddyfiles
+- `GET /api/caddy/files/:id` - Get Caddyfile content for a container
+- `PUT /api/caddy/files/:id` - Update Caddyfile manually
+- `DELETE /api/caddy/files/:id` - Delete Caddyfile
+- `POST /api/caddy/reload` - Reload Caddy configuration
+
 ### Configuration Endpoints
 - `GET /api/config` - Get configuration
 - `POST /api/config` - Update configuration
@@ -130,6 +147,13 @@ docker:
 
 podman:
   enabled: true
+
+caddy:
+  enabled: false
+  caddyfile_path: "/etc/caddy/conf.d"  # Directory for Caddyfiles
+  use_sudo: false  # Use sudo for Caddy reload
+  auto_reload: true  # Auto-reload on changes
+  caddy_binary_path: "caddy"  # Path to Caddy binary
 
 ui:
   title: "Gintainer"
