@@ -46,6 +46,7 @@ type CaddyConfig struct {
 	UseSudo          bool   `yaml:"use_sudo"`           // Whether to use sudo for Caddy reload
 	AutoReload       bool   `yaml:"auto_reload"`        // Automatically reload Caddy on changes
 	CaddyBinaryPath  string `yaml:"caddy_binary_path"`  // Path to Caddy binary (default: "caddy")
+	ReloadMethod     string `yaml:"reload_method"`      // Reload method: "binary" or "systemctl" (default: "binary")
 }
 
 // UIConfig represents UI configuration
@@ -119,6 +120,7 @@ func DefaultConfig() *Config {
 			UseSudo:         false,
 			AutoReload:      true,
 			CaddyBinaryPath: "caddy",
+			ReloadMethod:    "binary",
 		},
 		UI: UIConfig{
 			Title:       "Gintainer",

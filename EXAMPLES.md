@@ -142,7 +142,7 @@ curl http://localhost:8080/api/caddy/files/CONTAINER_ID
 curl -X PUT http://localhost:8080/api/caddy/files/CONTAINER_ID \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "example.com {\n\treverse_proxy localhost:8080\n\ttls internal\n}"
+    "content": "example.com {\n\treverse_proxy :8080\n\ttls internal\n}"
   }'
 ```
 

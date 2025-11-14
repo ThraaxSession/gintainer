@@ -23,15 +23,17 @@ caddy:
   use_sudo: false  # Set to true if Caddy reload requires sudo
   auto_reload: true  # Automatically reload Caddy when files change
   caddy_binary_path: "caddy"  # Path to Caddy binary
+  reload_method: "binary"  # Reload method: "binary" or "systemctl"
 ```
 
 ### Configuration Options
 
 - **enabled**: Enable/disable Caddy integration. When disabled, Caddy API endpoints will not be available.
 - **caddyfile_path**: Directory where Gintainer will create Caddyfiles (must be included in Caddy's config)
-- **use_sudo**: Whether to use `sudo` when running `caddy reload`
+- **use_sudo**: Whether to use `sudo` when running Caddy reload commands
 - **auto_reload**: Automatically reload Caddy after creating/updating/deleting Caddyfiles
 - **caddy_binary_path**: Path to the Caddy binary (defaults to `caddy` in PATH)
+- **reload_method**: Method to reload Caddy. Options: `binary` (default, uses `caddy reload`) or `systemctl` (uses `systemctl reload caddy`)
 
 **Important:** The Caddy API endpoints (`/api/caddy/*`) are only registered when `enabled: true` is set in the configuration.
 
@@ -78,7 +80,7 @@ Generated Caddyfile:
 ```
 myapp.example.com {
     tls internal
-    reverse_proxy localhost:8080
+    reverse_proxy :8080
 }
 ```
 
@@ -97,7 +99,7 @@ Generated Caddyfile:
 api.example.com {
     tls internal
     handle_path /api* {
-        reverse_proxy localhost:3000
+        reverse_proxy :3000
     }
 }
 ```
@@ -114,7 +116,7 @@ labels:
 Generated Caddyfile:
 ```
 localhost {
-    reverse_proxy localhost:8080
+    reverse_proxy :8080
 }
 ```
 
@@ -142,7 +144,7 @@ curl http://localhost:8080/api/caddy/files/CONTAINER_ID
 curl -X PUT http://localhost:8080/api/caddy/files/CONTAINER_ID \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "custom.example.com {\n\treverse_proxy localhost:9000\n\ttls off\n}"
+    "content": "custom.example.com {\n\treverse_proxy :9000\n\ttls off\n}"
   }'
 ```
 

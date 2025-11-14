@@ -201,13 +201,29 @@ func (s *Service) Reload(ctx context.Context) error {
 	s.mu.RLock()
 	useSudo := s.config.UseSudo
 	caddyBinary := s.config.CaddyBinaryPath
+	reloadMethod := s.config.ReloadMethod
 	s.mu.RUnlock()
 
+	// Default to binary if not specified
+	if reloadMethod == "" {
+		reloadMethod = "binary"
+	}
+
 	var cmd *exec.Cmd
-	if useSudo {
-		cmd = exec.CommandContext(ctx, "sudo", caddyBinary, "reload")
+	if reloadMethod == "systemctl" {
+		// Use systemctl to reload Caddy
+		if useSudo {
+			cmd = exec.CommandContext(ctx, "sudo", "systemctl", "reload", "caddy")
+		} else {
+			cmd = exec.CommandContext(ctx, "systemctl", "reload", "caddy")
+		}
 	} else {
-		cmd = exec.CommandContext(ctx, caddyBinary, "reload")
+		// Use binary command (default)
+		if useSudo {
+			cmd = exec.CommandContext(ctx, "sudo", caddyBinary, "reload")
+		} else {
+			cmd = exec.CommandContext(ctx, caddyBinary, "reload")
+		}
 	}
 
 	output, err := cmd.CombinedOutput()
@@ -245,10 +261,10 @@ func (s *Service) buildCaddyfileContent(domain, port, pathPrefix, tls string) st
 	// Reverse proxy configuration
 	if pathPrefix != "/" {
 		sb.WriteString(fmt.Sprintf("\thandle_path %s* {\n", pathPrefix))
-		sb.WriteString(fmt.Sprintf("\t\treverse_proxy localhost:%s\n", port))
+		sb.WriteString(fmt.Sprintf("\t\treverse_proxy :%s\n", port))
 		sb.WriteString("\t}\n")
 	} else {
-		sb.WriteString(fmt.Sprintf("\treverse_proxy localhost:%s\n", port))
+		sb.WriteString(fmt.Sprintf("\treverse_proxy :%s\n", port))
 	}
 
 	sb.WriteString("}\n")

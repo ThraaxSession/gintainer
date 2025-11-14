@@ -218,14 +218,14 @@ func TestBuildCaddyfileContent(t *testing.T) {
 	// Test basic configuration
 	content := service.buildCaddyfileContent("example.com", "8080", "/", "auto")
 	assert.Contains(t, content, "example.com")
-	assert.Contains(t, content, "reverse_proxy localhost:8080")
+	assert.Contains(t, content, "reverse_proxy :8080")
 	assert.Contains(t, content, "tls internal")
 
 	// Test with path prefix
 	content = service.buildCaddyfileContent("api.example.com", "9000", "/api", "auto")
 	assert.Contains(t, content, "api.example.com")
 	assert.Contains(t, content, "handle_path /api*")
-	assert.Contains(t, content, "reverse_proxy localhost:9000")
+	assert.Contains(t, content, "reverse_proxy :9000")
 
 	// Test with TLS off
 	content = service.buildCaddyfileContent("local.test", "3000", "/", "off")

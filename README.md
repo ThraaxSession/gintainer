@@ -193,7 +193,7 @@ PUT /api/caddy/files/:id
 Content-Type: application/json
 
 {
-  "content": "example.com {\n\treverse_proxy localhost:8080\n}"
+  "content": "example.com {\n\treverse_proxy :8080\n}"
 }
 ```
 

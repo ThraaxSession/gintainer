@@ -154,6 +154,7 @@ caddy:
   use_sudo: false  # Use sudo for Caddy reload
   auto_reload: true  # Auto-reload on changes
   caddy_binary_path: "caddy"  # Path to Caddy binary
+  reload_method: "binary"  # Reload method: "binary" or "systemctl"
 
 ui:
   title: "Gintainer"
