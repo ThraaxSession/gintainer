@@ -1,0 +1,19 @@
+server:
+  port: "8080"
+  mode: "debug"  # "debug" or "release"
+
+scheduler:
+  enabled: false
+  schedule: "0 2 * * *"  # Cron expression: 2 AM daily
+  filters: []  # Container name patterns to update
+
+docker:
+  enabled: true
+
+podman:
+  enabled: true
+
+ui:
+  title: "Gintainer"
+  description: "Container & Pod Management"
+  theme: "light"  # "light" or "dark"
