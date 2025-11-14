@@ -103,6 +103,33 @@ func (p *PodmanRuntime) DeleteContainer(ctx context.Context, containerID string,
 	return nil
 }
 
+// StartContainer starts a Podman container
+func (p *PodmanRuntime) StartContainer(ctx context.Context, containerID string) error {
+	cmd := exec.CommandContext(ctx, "podman", "start", containerID)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start Podman container %s: %w", containerID, err)
+	}
+	return nil
+}
+
+// StopContainer stops a Podman container
+func (p *PodmanRuntime) StopContainer(ctx context.Context, containerID string) error {
+	cmd := exec.CommandContext(ctx, "podman", "stop", containerID)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to stop Podman container %s: %w", containerID, err)
+	}
+	return nil
+}
+
+// RestartContainer restarts a Podman container
+func (p *PodmanRuntime) RestartContainer(ctx context.Context, containerID string) error {
+	cmd := exec.CommandContext(ctx, "podman", "restart", containerID)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to restart Podman container %s: %w", containerID, err)
+	}
+	return nil
+}
+
 // DeletePod deletes a Podman pod
 func (p *PodmanRuntime) DeletePod(ctx context.Context, podID string, force bool) error {
 	args := []string{"pod", "rm"}
@@ -114,6 +141,33 @@ func (p *PodmanRuntime) DeletePod(ctx context.Context, podID string, force bool)
 	cmd := exec.CommandContext(ctx, "podman", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to delete Podman pod %s: %w", podID, err)
+	}
+	return nil
+}
+
+// StartPod starts a Podman pod
+func (p *PodmanRuntime) StartPod(ctx context.Context, podID string) error {
+	cmd := exec.CommandContext(ctx, "podman", "pod", "start", podID)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start Podman pod %s: %w", podID, err)
+	}
+	return nil
+}
+
+// StopPod stops a Podman pod
+func (p *PodmanRuntime) StopPod(ctx context.Context, podID string) error {
+	cmd := exec.CommandContext(ctx, "podman", "pod", "stop", podID)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to stop Podman pod %s: %w", podID, err)
+	}
+	return nil
+}
+
+// RestartPod restarts a Podman pod
+func (p *PodmanRuntime) RestartPod(ctx context.Context, podID string) error {
+	cmd := exec.CommandContext(ctx, "podman", "pod", "restart", podID)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to restart Podman pod %s: %w", podID, err)
 	}
 	return nil
 }

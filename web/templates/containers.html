@@ -1,17 +1,31 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="{{ .theme }}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .title }} - Containers</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <style>.sidebar { min-height: 100vh; background-color: var(--bs-light); } [data-bs-theme="dark"] .sidebar { background-color: var(--bs-dark); } .nav-link.active { background-color: var(--bs-primary); color: white !important; } .log-viewer { background-color: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; padding: 1rem; border-radius: 0.375rem; max-height: 500px; overflow-y: auto; }</style>
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        [data-bs-theme="dark"] body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+        .sidebar { min-height: 100vh; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); }
+        [data-bs-theme="dark"] .sidebar { background: rgba(30,30,40,0.95); }
+        .nav-link { transition: all 0.3s; border-radius: 8px; margin: 4px 8px; }
+        .nav-link:hover { background: rgba(102,126,234,0.1); transform: translateX(5px); }
+        .nav-link.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+        .card { border: none; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); background: white; }
+        [data-bs-theme="dark"] .card { background: rgba(30,30,40,0.95); }
+        main { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 20px; margin: 20px; padding: 20px; }
+        [data-bs-theme="dark"] main { background: rgba(30,30,40,0.95); }
+        .log-viewer { background: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; padding: 1rem; border-radius: 10px; max-height: 500px; overflow-y: auto; }
+        .btn-gradient { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; transition: all 0.3s; }
+        .btn-gradient:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102,126,234,0.4); color: white; }
+    </style>
 </head>
 <body>
     <div class="container-fluid"><div class="row">
         <nav class="col-md-2 d-md-block sidebar collapse"><div class="position-sticky pt-3">
-            <h5 class="px-3 mb-3">{{ .title }}</h5>
+            <h5 class="px-3 mb-3" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">{{ .title }}</h5>
             <ul class="nav flex-column">
                 <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
                 <li class="nav-item"><a class="nav-link active" href="/containers"><i class="bi bi-box-seam"></i> Containers</a></li>
@@ -21,18 +35,18 @@
             </ul>
         </div></nav>
         <main class="col-md-10 ms-sm-auto px-md-4">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                <h1 class="h2">Containers</h1>
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3">
+                <h1 class="h2" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">Containers</h1>
             </div>
-            <div class="row mb-3"><div class="col-md-12"><div class="card"><div class="card-header"><h5 class="card-title mb-0">Filters</h5></div><div class="card-body"><div class="row g-3">
+            <div class="row mb-3"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3"><h5 class="card-title mb-0">Filters</h5></div><div class="card-body"><div class="row g-3">
                 <div class="col-md-4"><label class="form-label">Runtime</label><select class="form-select" id="filterRuntime" onchange="loadContainers()"><option value="all">All</option><option value="docker">Docker</option><option value="podman">Podman</option></select></div>
                 <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" id="filterStatus" onchange="loadContainers()"><option value="">All</option><option value="running">Running</option><option value="exited">Exited</option></select></div>
                 <div class="col-md-4"><label class="form-label">Name</label><input type="text" class="form-control" id="filterName" placeholder="Filter by name" onkeyup="loadContainers()"></div>
             </div></div></div></div></div>
-            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="5" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
+            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><button class="btn btn-gradient btn-sm" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="5" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
         </main>
     </div></div>
-    <div class="modal fade" id="buildModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Build from Dockerfile</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label">Image Name</label><input type="text" class="form-control" id="imageName" placeholder="my-image:latest"></div><div class="mb-3"><label class="form-label">Runtime</label><select class="form-select" id="buildRuntime"><option value="docker">Docker</option><option value="podman">Podman</option></select></div><div class="mb-3"><label class="form-label">Dockerfile</label><textarea class="form-control" id="dockerfile" rows="10" placeholder="FROM alpine:latest"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-primary" onclick="buildImage()">Build</button></div></div></div></div>
+    <div class="modal fade" id="buildModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Build from Dockerfile</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label">Image Name</label><input type="text" class="form-control" id="imageName" placeholder="my-image:latest"></div><div class="mb-3"><label class="form-label">Runtime</label><select class="form-select" id="buildRuntime"><option value="docker">Docker</option><option value="podman">Podman</option></select></div><div class="mb-3"><label class="form-label">Dockerfile</label><textarea class="form-control" id="dockerfile" rows="10" placeholder="FROM alpine:latest"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-gradient" onclick="buildImage()">Build</button></div></div></div></div>
     <div class="modal fade" id="logsModal" tabindex="-1"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Container Logs: <span id="logContainerName"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="log-viewer" id="logContent">Loading...</div></div></div></div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -42,7 +56,12 @@ function loadContainers() {
     fetch(url).then(r=>r.json()).then(data=>{
         const c = data.containers || []; const tbody = document.getElementById('containerList');
         tbody.innerHTML = c.length===0 ? '<tr><td colspan="5" class="text-center">No containers</td></tr>' :
-            c.map(x=>`<tr><td>${x.name}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td><button class="btn btn-sm btn-outline-primary" onclick="viewLogs('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-file-text"></i></button> <button class="btn btn-sm btn-outline-danger" onclick="deleteContainer('${x.id}','${x.runtime}')"><i class="bi bi-trash"></i></button></td></tr>`).join('');
+            c.map(x=>`<tr><td>${x.name}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>
+                ${x.state==='running'?`<button class="btn btn-sm btn-warning" onclick="stopContainer('${x.id}','${x.runtime}')"><i class="bi bi-stop-circle"></i></button>`:`<button class="btn btn-sm btn-success" onclick="startContainer('${x.id}','${x.runtime}')"><i class="bi bi-play-circle"></i></button>`}
+                <button class="btn btn-sm btn-info" onclick="restartContainer('${x.id}','${x.runtime}')"><i class="bi bi-arrow-clockwise"></i></button>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewLogs('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-file-text"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteContainer('${x.id}','${x.runtime}')"><i class="bi bi-trash"></i></button>
+            </td></tr>`).join('');
     });
 }
 function buildImage() {
@@ -51,10 +70,10 @@ function buildImage() {
     fetch('/api/containers', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({image_name: name, runtime: rt, dockerfile: df}) })
         .then(r=>r.json()).then(()=>{ alert('Image built'); bootstrap.Modal.getInstance(document.getElementById('buildModal')).hide(); loadContainers(); });
 }
-function deleteContainer(id, rt) {
-    if (!confirm('Delete container?')) return;
-    fetch(`/api/containers/${id}?runtime=${rt}&force=true`, {method: 'DELETE'}).then(()=>{ alert('Deleted'); loadContainers(); });
-}
+function startContainer(id, rt) { fetch(`/api/containers/${id}/start?runtime=${rt}`, {method: 'POST'}).then(()=>{ alert('Started'); loadContainers(); }); }
+function stopContainer(id, rt) { fetch(`/api/containers/${id}/stop?runtime=${rt}`, {method: 'POST'}).then(()=>{ alert('Stopped'); loadContainers(); }); }
+function restartContainer(id, rt) { fetch(`/api/containers/${id}/restart?runtime=${rt}`, {method: 'POST'}).then(()=>{ alert('Restarted'); loadContainers(); }); }
+function deleteContainer(id, rt) { if (!confirm('Delete container?')) return; fetch(`/api/containers/${id}?runtime=${rt}&force=true`, {method: 'DELETE'}).then(()=>{ alert('Deleted'); loadContainers(); }); }
 function viewLogs(id, name, rt) {
     document.getElementById('logContainerName').textContent = name; document.getElementById('logContent').textContent = 'Loading...';
     new bootstrap.Modal(document.getElementById('logsModal')).show();

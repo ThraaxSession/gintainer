@@ -144,6 +144,132 @@ func (h *Handler) DeletePod(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "pod deleted successfully"})
 }
 
+// StartContainer handles POST /api/containers/:id/start
+func (h *Handler) StartContainer(c *gin.Context) {
+	containerID := c.Param("id")
+	runtimeName := c.Query("runtime")
+
+	if runtimeName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
+		return
+	}
+
+	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	if err := rt.StartContainer(c.Request.Context(), containerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "container started successfully"})
+}
+
+// StopContainer handles POST /api/containers/:id/stop
+func (h *Handler) StopContainer(c *gin.Context) {
+	containerID := c.Param("id")
+	runtimeName := c.Query("runtime")
+
+	if runtimeName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
+		return
+	}
+
+	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	if err := rt.StopContainer(c.Request.Context(), containerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "container stopped successfully"})
+}
+
+// RestartContainer handles POST /api/containers/:id/restart
+func (h *Handler) RestartContainer(c *gin.Context) {
+	containerID := c.Param("id")
+	runtimeName := c.Query("runtime")
+
+	if runtimeName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
+		return
+	}
+
+	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	if err := rt.RestartContainer(c.Request.Context(), containerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "container restarted successfully"})
+}
+
+// StartPod handles POST /api/pods/:id/start
+func (h *Handler) StartPod(c *gin.Context) {
+	podID := c.Param("id")
+
+	rt, ok := h.runtimeManager.GetRuntime("podman")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "podman runtime not available"})
+		return
+	}
+
+	if err := rt.StartPod(c.Request.Context(), podID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "pod started successfully"})
+}
+
+// StopPod handles POST /api/pods/:id/stop
+func (h *Handler) StopPod(c *gin.Context) {
+	podID := c.Param("id")
+
+	rt, ok := h.runtimeManager.GetRuntime("podman")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "podman runtime not available"})
+		return
+	}
+
+	if err := rt.StopPod(c.Request.Context(), podID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "pod stopped successfully"})
+}
+
+// RestartPod handles POST /api/pods/:id/restart
+func (h *Handler) RestartPod(c *gin.Context) {
+	podID := c.Param("id")
+
+	rt, ok := h.runtimeManager.GetRuntime("podman")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "podman runtime not available"})
+		return
+	}
+
+	if err := rt.RestartPod(c.Request.Context(), podID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "pod restarted successfully"})
+}
+
 // CreateContainer handles POST /api/containers
 func (h *Handler) CreateContainer(c *gin.Context) {
 	var req models.CreateContainerRequest

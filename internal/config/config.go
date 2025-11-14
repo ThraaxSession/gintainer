@@ -134,7 +134,7 @@ func (m *Manager) loadConfig() error {
 func (m *Manager) GetConfig() *Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	// Return the config directly - safe for reading
 	return m.config
 }

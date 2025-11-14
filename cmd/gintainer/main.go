@@ -106,12 +106,18 @@ func main() {
 		api.GET("/containers", handler.ListContainers)
 		api.POST("/containers", handler.CreateContainer)
 		api.DELETE("/containers/:id", handler.DeleteContainer)
+		api.POST("/containers/:id/start", handler.StartContainer)
+		api.POST("/containers/:id/stop", handler.StopContainer)
+		api.POST("/containers/:id/restart", handler.RestartContainer)
 		api.POST("/containers/update", handler.UpdateContainers)
 		api.GET("/containers/:id/logs", handler.StreamLogs)
 
 		// Pod routes
 		api.GET("/pods", handler.ListPods)
 		api.DELETE("/pods/:id", handler.DeletePod)
+		api.POST("/pods/:id/start", handler.StartPod)
+		api.POST("/pods/:id/stop", handler.StopPod)
+		api.POST("/pods/:id/restart", handler.RestartPod)
 
 		// Compose routes
 		api.POST("/compose", handler.DeployCompose)

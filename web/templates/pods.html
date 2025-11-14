@@ -5,12 +5,25 @@
     <title>{{ .title }} - Pods</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <style>.sidebar { min-height: 100vh; background-color: var(--bs-light); } [data-bs-theme="dark"] .sidebar { background-color: var(--bs-dark); } .nav-link.active { background-color: var(--bs-primary); color: white !important; }</style>
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        [data-bs-theme="dark"] body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+        .sidebar { min-height: 100vh; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); }
+        [data-bs-theme="dark"] .sidebar { background: rgba(30,30,40,0.95); }
+        .nav-link { transition: all 0.3s; border-radius: 8px; margin: 4px 8px; }
+        .nav-link:hover { background: rgba(102,126,234,0.1); transform: translateX(5px); }
+        .nav-link.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+        .card { border: none; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); background: white; }
+        [data-bs-theme="dark"] .card { background: rgba(30,30,40,0.95); }
+        main { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 20px; margin: 20px; padding: 20px; }
+        [data-bs-theme="dark"] main { background: rgba(30,30,40,0.95); }
+    </style>
 </head>
 <body>
     <div class="container-fluid"><div class="row">
         <nav class="col-md-2 d-md-block sidebar collapse"><div class="position-sticky pt-3">
-            <h5 class="px-3 mb-3">{{ .title }}</h5><ul class="nav flex-column">
+            <h5 class="px-3 mb-3" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">{{ .title }}</h5>
+            <ul class="nav flex-column">
                 <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
                 <li class="nav-item"><a class="nav-link" href="/containers"><i class="bi bi-box-seam"></i> Containers</a></li>
                 <li class="nav-item"><a class="nav-link active" href="/pods"><i class="bi bi-boxes"></i> Pods</a></li>
@@ -19,8 +32,10 @@
             </ul>
         </div></nav>
         <main class="col-md-10 ms-sm-auto px-md-4">
-            <div class="d-flex justify-content-between pt-3 pb-2 mb-3 border-bottom"><h1 class="h2">Pods</h1></div>
-            <div class="card"><div class="card-header"><h5 class="card-title mb-0">Pod List (Podman Only)</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="podList"><tr><td colspan="4" class="text-center">Loading...</td></tr></tbody></table></div></div></div>
+            <div class="d-flex justify-content-between pt-3 pb-2 mb-3">
+                <h1 class="h2" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">Pods</h1>
+            </div>
+            <div class="card"><div class="card-header bg-transparent border-0 pt-3"><h5 class="card-title mb-0">Pod List (Podman Only)</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="podList"><tr><td colspan="4" class="text-center">Loading...</td></tr></tbody></table></div></div></div>
         </main>
     </div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -29,9 +44,17 @@ function loadPods() {
     fetch('/api/pods').then(r=>r.json()).then(data=>{
         const p = data.pods || []; const tbody = document.getElementById('podList');
         tbody.innerHTML = p.length===0 ? '<tr><td colspan="4" class="text-center">No pods</td></tr>' :
-            p.map(x=>`<tr><td>${x.name||'N/A'}</td><td><span class="badge bg-info">${x.status||'unknown'}</span></td><td>${new Date(x.created).toLocaleString()}</td><td><button class="btn btn-sm btn-outline-danger" onclick="deletePod('${x.id}')"><i class="bi bi-trash"></i> Delete</button></td></tr>`).join('');
+            p.map(x=>`<tr><td>${x.name||'N/A'}</td><td><span class="badge bg-info">${x.status||'unknown'}</span></td><td>${new Date(x.created).toLocaleString()}</td><td>
+                <button class="btn btn-sm btn-success" onclick="startPod('${x.id}')"><i class="bi bi-play-circle"></i></button>
+                <button class="btn btn-sm btn-warning" onclick="stopPod('${x.id}')"><i class="bi bi-stop-circle"></i></button>
+                <button class="btn btn-sm btn-info" onclick="restartPod('${x.id}')"><i class="bi bi-arrow-clockwise"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deletePod('${x.id}')"><i class="bi bi-trash"></i></button>
+            </td></tr>`).join('');
     });
 }
+function startPod(id) { fetch(`/api/pods/${id}/start`, {method: 'POST'}).then(()=>{ alert('Started'); loadPods(); }); }
+function stopPod(id) { fetch(`/api/pods/${id}/stop`, {method: 'POST'}).then(()=>{ alert('Stopped'); loadPods(); }); }
+function restartPod(id) { fetch(`/api/pods/${id}/restart`, {method: 'POST'}).then(()=>{ alert('Restarted'); loadPods(); }); }
 function deletePod(id) { if (!confirm('Delete pod?')) return; fetch(`/api/pods/${id}?force=true`, {method: 'DELETE'}).then(()=>{ alert('Deleted'); loadPods(); }); }
 loadPods(); setInterval(loadPods, 5000);
     </script>

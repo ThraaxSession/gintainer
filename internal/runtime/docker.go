@@ -99,8 +99,52 @@ func (d *DockerRuntime) DeleteContainer(ctx context.Context, containerID string,
 	return nil
 }
 
+// StartContainer starts a Docker container
+func (d *DockerRuntime) StartContainer(ctx context.Context, containerID string) error {
+	err := d.client.ContainerStart(ctx, containerID, container.StartOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to start Docker container %s: %w", containerID, err)
+	}
+	return nil
+}
+
+// StopContainer stops a Docker container
+func (d *DockerRuntime) StopContainer(ctx context.Context, containerID string) error {
+	timeout := 10
+	err := d.client.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
+	if err != nil {
+		return fmt.Errorf("failed to stop Docker container %s: %w", containerID, err)
+	}
+	return nil
+}
+
+// RestartContainer restarts a Docker container
+func (d *DockerRuntime) RestartContainer(ctx context.Context, containerID string) error {
+	timeout := 10
+	err := d.client.ContainerRestart(ctx, containerID, container.StopOptions{Timeout: &timeout})
+	if err != nil {
+		return fmt.Errorf("failed to restart Docker container %s: %w", containerID, err)
+	}
+	return nil
+}
+
 // DeletePod returns an error (Docker doesn't have pods)
 func (d *DockerRuntime) DeletePod(ctx context.Context, podID string, force bool) error {
+	return fmt.Errorf("Docker does not support pods")
+}
+
+// StartPod returns an error (Docker doesn't have pods)
+func (d *DockerRuntime) StartPod(ctx context.Context, podID string) error {
+	return fmt.Errorf("Docker does not support pods")
+}
+
+// StopPod returns an error (Docker doesn't have pods)
+func (d *DockerRuntime) StopPod(ctx context.Context, podID string) error {
+	return fmt.Errorf("Docker does not support pods")
+}
+
+// RestartPod returns an error (Docker doesn't have pods)
+func (d *DockerRuntime) RestartPod(ctx context.Context, podID string) error {
 	return fmt.Errorf("Docker does not support pods")
 }
 
