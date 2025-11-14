@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -218,6 +219,48 @@ func (p *PodmanRuntime) UpdateContainer(ctx context.Context, containerID string)
 		return fmt.Errorf("failed to create new container: %w, output: %s", err, string(output))
 	}
 
+	return nil
+}
+
+// StreamLogs streams logs from a Podman container
+func (p *PodmanRuntime) StreamLogs(ctx context.Context, containerID string, follow bool, tail string) (io.ReadCloser, error) {
+	args := []string{"logs"}
+	if follow {
+		args = append(args, "-f")
+	}
+	if tail != "" && tail != "all" {
+		args = append(args, "--tail", tail)
+	}
+	args = append(args, "-t", containerID)
+
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start podman logs: %w", err)
+	}
+
+	// Create a ReadCloser that also handles process cleanup
+	return &cmdReadCloser{
+		ReadCloser: stdout,
+		cmd:        cmd,
+	}, nil
+}
+
+// cmdReadCloser wraps an io.ReadCloser and also handles command cleanup
+type cmdReadCloser struct {
+	io.ReadCloser
+	cmd *exec.Cmd
+}
+
+func (c *cmdReadCloser) Close() error {
+	c.ReadCloser.Close()
+	if c.cmd.Process != nil {
+		c.cmd.Process.Kill()
+	}
 	return nil
 }
 

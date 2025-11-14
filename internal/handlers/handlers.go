@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/ThraaxSession/gintainer/internal/models"
@@ -223,6 +224,46 @@ func (h *Handler) UpdateContainers(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"results": results})
+}
+
+// StreamLogs handles GET /api/containers/:id/logs
+func (h *Handler) StreamLogs(c *gin.Context) {
+	containerID := c.Param("id")
+	runtimeName := c.Query("runtime")
+	follow := c.Query("follow") == "true"
+	tail := c.DefaultQuery("tail", "100")
+
+	if runtimeName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
+		return
+	}
+
+	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	logStream, err := rt.StreamLogs(c.Request.Context(), containerID, follow, tail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer logStream.Close()
+
+	// Set headers for streaming
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.Header("X-Content-Type-Options", "nosniff")
+
+	// Stream logs to response
+	c.Stream(func(w io.Writer) bool {
+		buf := make([]byte, 4096)
+		n, err := logStream.Read(buf)
+		if n > 0 {
+			w.Write(buf[:n])
+		}
+		return err == nil
+	})
 }
 
 // HealthCheck handles GET /health

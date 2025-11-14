@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="{{ .theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .title }} - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .sidebar { min-height: 100vh; background-color: var(--bs-light); }
+        [data-bs-theme="dark"] .sidebar { background-color: var(--bs-dark); }
+        .nav-link.active { background-color: var(--bs-primary); color: white !important; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <h5 class="px-3 mb-3">{{ .title }}</h5>
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link active" href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/containers"><i class="bi bi-box-seam"></i> Containers</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/pods"><i class="bi bi-boxes"></i> Pods</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/scheduler"><i class="bi bi-clock"></i> Scheduler</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/config"><i class="bi bi-gear"></i> Configuration</a></li>
+                    </ul>
+                </div>
+            </nav>
+            <main class="col-md-10 ms-sm-auto px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Dashboard</h1>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()"><i class="bi bi-circle-half"></i> Toggle Theme</button>
+                </div>
+                <div class="row">
+                    <div class="col-md-3 mb-4">
+                        <div class="card text-bg-primary">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-box-seam"></i> Containers</h5>
+                                <p class="card-text display-6" id="containerCount">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4">
+                        <div class="card text-bg-success">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-play-circle"></i> Running</h5>
+                                <p class="card-text display-6" id="runningCount">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4">
+                        <div class="card text-bg-info">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-boxes"></i> Pods</h5>
+                                <p class="card-text display-6" id="podCount">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4">
+                        <div class="card text-bg-warning">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-clock"></i> Scheduler</h5>
+                                <p class="card-text" id="schedulerStatus">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header"><h5 class="card-title mb-0">Recent Containers</h5></div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead><tr><th>Name</th><th>Status</th><th>Runtime</th></tr></thead>
+                                        <tbody id="recentContainers"><tr><td colspan="3" class="text-center">Loading...</td></tr></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header"><h5 class="card-title mb-0">Quick Actions</h5></div>
+                            <div class="card-body">
+                                <div class="d-grid gap-2">
+                                    <a href="/containers" class="btn btn-outline-primary"><i class="bi bi-box-seam"></i> Manage Containers</a>
+                                    <a href="/pods" class="btn btn-outline-info"><i class="bi bi-boxes"></i> Manage Pods</a>
+                                    <a href="/scheduler" class="btn btn-outline-warning"><i class="bi bi-clock"></i> Configure Scheduler</a>
+                                    <a href="/config" class="btn btn-outline-secondary"><i class="bi bi-gear"></i> System Configuration</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+function toggleTheme() { const html = document.documentElement; const t = html.getAttribute('data-bs-theme'); html.setAttribute('data-bs-theme', t === 'dark' ? 'light' : 'dark'); }
+function loadDashboard() {
+    fetch('/api/containers?runtime=all').then(r=>r.json()).then(data=>{
+        const c = data.containers || []; document.getElementById('containerCount').textContent = c.length;
+        document.getElementById('runningCount').textContent = c.filter(x=>x.state==='running').length;
+        const tbody = document.getElementById('recentContainers');
+        tbody.innerHTML = c.length===0 ? '<tr><td colspan="3" class="text-center">No containers</td></tr>' :
+            c.slice(0,5).map(x=>`<tr><td>${x.name}</td><td><span class="badge ${x.state==='running'?'bg-success':'bg-secondary'}">${x.state}</span></td><td>${x.runtime}</td></tr>`).join('');
+    });
+    fetch('/api/pods').then(r=>r.json()).then(data=>document.getElementById('podCount').textContent=(data.pods||[]).length);
+    fetch('/api/scheduler/config').then(r=>r.json()).then(data=>document.getElementById('schedulerStatus').textContent=data.enabled?`Enabled (${data.schedule})`:'Disabled');
+}
+loadDashboard(); setInterval(loadDashboard, 5000);
+    </script>
+</body>
+</html>

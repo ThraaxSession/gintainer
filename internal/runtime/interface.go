@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"io"
+
 	"github.com/ThraaxSession/gintainer/internal/models"
 )
 
@@ -30,6 +32,9 @@ type ContainerRuntime interface {
 
 	// UpdateContainer updates a container by pulling the latest image and recreating it
 	UpdateContainer(ctx context.Context, containerID string) error
+
+	// StreamLogs streams logs from a container
+	StreamLogs(ctx context.Context, containerID string, follow bool, tail string) (io.ReadCloser, error)
 
 	// GetRuntimeName returns the name of the runtime ("docker" or "podman")
 	GetRuntimeName() string

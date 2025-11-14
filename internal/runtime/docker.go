@@ -226,6 +226,24 @@ func (d *DockerRuntime) UpdateContainer(ctx context.Context, containerID string)
 	return nil
 }
 
+// StreamLogs streams logs from a Docker container
+func (d *DockerRuntime) StreamLogs(ctx context.Context, containerID string, follow bool, tail string) (io.ReadCloser, error) {
+	options := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     follow,
+		Tail:       tail,
+		Timestamps: true,
+	}
+
+	logs, err := d.client.ContainerLogs(ctx, containerID, options)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Docker container logs: %w", err)
+	}
+
+	return logs, nil
+}
+
 // GetRuntimeName returns "docker"
 func (d *DockerRuntime) GetRuntimeName() string {
 	return "docker"
