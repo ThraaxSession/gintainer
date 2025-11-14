@@ -32,5 +32,5 @@ go.work.sum
 # .vscode/
 
 # Binary
-gintainer
+/gintainer
 /cmd/gintainer/gintainer
