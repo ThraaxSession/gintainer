@@ -134,13 +134,15 @@ func main() {
 		api.GET("/scheduler/config", schedulerHandler.GetConfig)
 		api.PUT("/scheduler/config", schedulerHandler.UpdateConfig)
 
-		// Caddy routes
-		api.GET("/caddy/status", caddyHandler.GetStatus)
-		api.GET("/caddy/files", caddyHandler.ListCaddyfiles)
-		api.GET("/caddy/files/:id", caddyHandler.GetCaddyfile)
-		api.PUT("/caddy/files/:id", caddyHandler.UpdateCaddyfile)
-		api.DELETE("/caddy/files/:id", caddyHandler.DeleteCaddyfile)
-		api.POST("/caddy/reload", caddyHandler.ReloadCaddy)
+		// Caddy routes (only enabled when Caddy integration is enabled)
+		if cfg.Caddy.Enabled {
+			api.GET("/caddy/status", caddyHandler.GetStatus)
+			api.GET("/caddy/files", caddyHandler.ListCaddyfiles)
+			api.GET("/caddy/files/:id", caddyHandler.GetCaddyfile)
+			api.PUT("/caddy/files/:id", caddyHandler.UpdateCaddyfile)
+			api.DELETE("/caddy/files/:id", caddyHandler.DeleteCaddyfile)
+			api.POST("/caddy/reload", caddyHandler.ReloadCaddy)
+		}
 
 		// Config routes
 		api.GET("/config", webHandler.GetConfig)

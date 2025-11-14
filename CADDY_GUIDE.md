@@ -27,11 +27,13 @@ caddy:
 
 ### Configuration Options
 
-- **enabled**: Enable/disable Caddy integration
+- **enabled**: Enable/disable Caddy integration. When disabled, Caddy API endpoints will not be available.
 - **caddyfile_path**: Directory where Gintainer will create Caddyfiles (must be included in Caddy's config)
 - **use_sudo**: Whether to use `sudo` when running `caddy reload`
 - **auto_reload**: Automatically reload Caddy after creating/updating/deleting Caddyfiles
 - **caddy_binary_path**: Path to the Caddy binary (defaults to `caddy` in PATH)
+
+**Important:** The Caddy API endpoints (`/api/caddy/*`) are only registered when `enabled: true` is set in the configuration.
 
 ### Caddy Configuration
 
@@ -117,6 +119,8 @@ localhost {
 ```
 
 ## API Usage
+
+**Note:** These API endpoints are only available when Caddy integration is enabled (`caddy.enabled: true` in `gintainer.yaml`).
 
 ### Check Caddy Status
 ```bash

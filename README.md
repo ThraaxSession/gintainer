@@ -165,6 +165,8 @@ Schedule format follows standard cron expressions:
 
 ### Caddy Integration
 
+**Note:** These endpoints are only available when Caddy integration is enabled in the configuration (`caddy.enabled: true`).
+
 #### Check Caddy Status
 ```bash
 GET /api/caddy/status
