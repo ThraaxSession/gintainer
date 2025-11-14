@@ -157,6 +157,14 @@ document.getElementById('configForm').addEventListener('submit', function(e) {
             enabled: false,
             schedule: '0 2 * * *',
             filters: []
+        },
+        caddy: currentConfig.caddy || {
+            enabled: false,
+            caddyfile_path: '',
+            caddy_binary_path: 'caddy',
+            use_sudo: false,
+            auto_reload: false,
+            reload_method: 'binary'
         }
     };
     
