@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/ThraaxSession/gintainer/internal/caddy"
 	"github.com/ThraaxSession/gintainer/internal/models"
 	"github.com/ThraaxSession/gintainer/internal/runtime"
 	"github.com/gin-gonic/gin"
@@ -12,12 +13,14 @@ import (
 // Handler manages HTTP handlers
 type Handler struct {
 	runtimeManager *runtime.Manager
+	caddyService   *caddy.Service
 }
 
 // NewHandler creates a new handler
-func NewHandler(runtimeManager *runtime.Manager) *Handler {
+func NewHandler(runtimeManager *runtime.Manager, caddyService *caddy.Service) *Handler {
 	return &Handler{
 		runtimeManager: runtimeManager,
+		caddyService:   caddyService,
 	}
 }
 
@@ -121,6 +124,11 @@ func (h *Handler) DeleteContainer(c *gin.Context) {
 		return
 	}
 
+	// Remove Caddy configuration if enabled
+	if h.caddyService != nil && h.caddyService.IsEnabled() {
+		_ = h.caddyService.DeleteCaddyfile(c.Request.Context(), containerID)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "container deleted successfully"})
 }
 
@@ -165,6 +173,20 @@ func (h *Handler) StartContainer(c *gin.Context) {
 		return
 	}
 
+	// Update Caddy configuration if enabled
+	if h.caddyService != nil && h.caddyService.IsEnabled() {
+		// Get container info to generate Caddyfile
+		containers, err := rt.ListContainers(c.Request.Context(), models.FilterOptions{})
+		if err == nil {
+			for _, container := range containers {
+				if container.ID == containerID {
+					_ = h.caddyService.GenerateCaddyfile(c.Request.Context(), container)
+					break
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "container started successfully"})
 }
 
@@ -187,6 +209,11 @@ func (h *Handler) StopContainer(c *gin.Context) {
 	if err := rt.StopContainer(c.Request.Context(), containerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Remove Caddy configuration if enabled
+	if h.caddyService != nil && h.caddyService.IsEnabled() {
+		_ = h.caddyService.DeleteCaddyfile(c.Request.Context(), containerID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "container stopped successfully"})
