@@ -4,15 +4,15 @@ import "time"
 
 // ContainerInfo represents container information across different runtimes
 type ContainerInfo struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Image      string            `json:"image"`
-	Status     string            `json:"status"`
-	State      string            `json:"state"`
-	Runtime    string            `json:"runtime"` // "docker" or "podman"
-	Created    time.Time         `json:"created"`
-	Labels     map[string]string `json:"labels,omitempty"`
-	Ports      []PortMapping     `json:"ports,omitempty"`
+	ID      string            `json:"id"`
+	Name    string            `json:"name"`
+	Image   string            `json:"image"`
+	Status  string            `json:"status"`
+	State   string            `json:"state"`
+	Runtime string            `json:"runtime"` // "docker" or "podman"
+	Created time.Time         `json:"created"`
+	Labels  map[string]string `json:"labels,omitempty"`
+	Ports   []PortMapping     `json:"ports,omitempty"`
 }
 
 // PortMapping represents a container port mapping
