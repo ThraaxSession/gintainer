@@ -65,3 +65,16 @@ type CronJobConfig struct {
 	Enabled  bool     `json:"enabled"`
 	Filters  []string `json:"filters,omitempty"` // Container names or patterns to update
 }
+
+// CaddyfileInfo represents information about a Caddyfile
+type CaddyfileInfo struct {
+	ContainerID string `json:"container_id"`
+	Filename    string `json:"filename"`
+	Content     string `json:"content,omitempty"`
+}
+
+// CaddyfileUpdateRequest represents a request to update a Caddyfile
+type CaddyfileUpdateRequest struct {
+	ContainerID string `json:"container_id"`
+	Content     string `json:"content"`
+}

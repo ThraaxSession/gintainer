@@ -15,6 +15,7 @@ type Config struct {
 	Scheduler SchedulerConfig `yaml:"scheduler"`
 	Docker    RuntimeConfig   `yaml:"docker"`
 	Podman    RuntimeConfig   `yaml:"podman"`
+	Caddy     CaddyConfig     `yaml:"caddy"`
 	UI        UIConfig        `yaml:"ui"`
 	mu        sync.RWMutex
 }
@@ -36,6 +37,16 @@ type SchedulerConfig struct {
 type RuntimeConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Socket  string `yaml:"socket,omitempty"`
+}
+
+// CaddyConfig represents Caddy reverse proxy configuration
+type CaddyConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	CaddyfilePath   string `yaml:"caddyfile_path"`    // Directory where Caddyfiles are stored
+	UseSudo         bool   `yaml:"use_sudo"`          // Whether to use sudo for Caddy reload
+	AutoReload      bool   `yaml:"auto_reload"`       // Automatically reload Caddy on changes
+	CaddyBinaryPath string `yaml:"caddy_binary_path"` // Path to Caddy binary (default: "caddy")
+	ReloadMethod    string `yaml:"reload_method"`     // Reload method: "binary" or "systemctl" (default: "binary")
 }
 
 // UIConfig represents UI configuration
@@ -102,6 +113,14 @@ func DefaultConfig() *Config {
 		},
 		Podman: RuntimeConfig{
 			Enabled: true,
+		},
+		Caddy: CaddyConfig{
+			Enabled:         false,
+			CaddyfilePath:   "/etc/caddy/conf.d",
+			UseSudo:         false,
+			AutoReload:      true,
+			CaddyBinaryPath: "caddy",
+			ReloadMethod:    "binary",
 		},
 		UI: UIConfig{
 			Title:       "Gintainer",

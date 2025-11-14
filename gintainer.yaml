@@ -13,6 +13,14 @@ docker:
 podman:
   enabled: true
 
+caddy:
+  enabled: false
+  caddyfile_path: "/etc/caddy/conf.d"  # Directory where Caddyfiles are stored
+  use_sudo: false  # Whether to use sudo for Caddy reload
+  auto_reload: true  # Automatically reload Caddy on configuration changes
+  caddy_binary_path: "caddy"  # Path to Caddy binary
+  reload_method: "binary"  # Reload method: "binary" or "systemctl"
+
 ui:
   title: "Gintainer"
   description: "Container & Pod Management"

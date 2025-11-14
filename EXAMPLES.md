@@ -120,6 +120,62 @@ curl -X PUT http://localhost:8080/api/scheduler/config \
   }'
 ```
 
+## Caddy Integration
+
+### Check Caddy status
+```bash
+curl http://localhost:8080/api/caddy/status
+```
+
+### List all Caddyfiles
+```bash
+curl http://localhost:8080/api/caddy/files
+```
+
+### Get Caddyfile for a container
+```bash
+curl http://localhost:8080/api/caddy/files/CONTAINER_ID
+```
+
+### Update Caddyfile manually
+```bash
+curl -X PUT http://localhost:8080/api/caddy/files/CONTAINER_ID \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "example.com {\n\treverse_proxy :8080\n\ttls internal\n}"
+  }'
+```
+
+### Delete Caddyfile
+```bash
+curl -X DELETE http://localhost:8080/api/caddy/files/CONTAINER_ID
+```
+
+### Reload Caddy
+```bash
+curl -X POST http://localhost:8080/api/caddy/reload
+```
+
+### Example: Deploy container with Caddy configuration
+
+Deploy a container with automatic Caddy reverse proxy:
+
+```bash
+# First, create a compose file with Caddy labels
+curl -X POST http://localhost:8080/api/compose \
+  -H "Content-Type: application/json" \
+  -d '{
+    "compose_content": "version: '\''3.8'\''\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - \"8080:80\"\n    labels:\n      - \"caddy.domain=myapp.example.com\"\n      - \"caddy.port=8080\"\n      - \"caddy.tls=auto\"",
+    "runtime": "docker"
+  }'
+```
+
+This will:
+1. Deploy the container with nginx
+2. Automatically create a Caddyfile at `/etc/caddy/conf.d/gintainer-{CONTAINER_ID}.caddy`
+3. Configure reverse proxy from `myapp.example.com` to `localhost:8080`
+4. Enable automatic HTTPS with Let's Encrypt
+
 ## Health Check
 
 ```bash

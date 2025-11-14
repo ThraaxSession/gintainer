@@ -11,12 +11,14 @@ A Golang application built with the Gin framework for managing containers and po
 - **Deploy from Compose**: Deploy containers using Docker/Podman Compose files
 - **Update Containers**: Pull latest image versions and recreate containers
 - **Automated Updates**: Configure cron jobs for automatic container updates
+- **Caddy Integration**: Automatic reverse proxy configuration for containers using Caddy
 
 ## Requirements
 
 - Go 1.18 or higher
 - Docker and/or Podman installed
 - (Optional) docker-compose or podman-compose for compose file support
+- (Optional) Caddy for automatic reverse proxy configuration
 
 ## Installation
 
@@ -161,6 +163,62 @@ Schedule format follows standard cron expressions:
 - `0 */4 * * *` - Run every 4 hours
 - `0 0 * * 0` - Run at midnight every Sunday
 
+### Caddy Integration
+
+**Note:** These endpoints are only available when Caddy integration is enabled in the configuration (`caddy.enabled: true`).
+
+#### Check Caddy Status
+```bash
+GET /api/caddy/status
+```
+
+#### List Caddyfiles
+```bash
+GET /api/caddy/files
+```
+
+#### Get Caddyfile Content
+```bash
+GET /api/caddy/files/:id
+```
+
+Example:
+```bash
+curl "http://localhost:8080/api/caddy/files/abc123"
+```
+
+#### Update Caddyfile
+```bash
+PUT /api/caddy/files/:id
+Content-Type: application/json
+
+{
+  "content": "example.com {\n\treverse_proxy :8080\n}"
+}
+```
+
+#### Delete Caddyfile
+```bash
+DELETE /api/caddy/files/:id
+```
+
+#### Reload Caddy
+```bash
+POST /api/caddy/reload
+```
+
+#### Container Labels for Caddy
+
+Containers can use labels to configure automatic reverse proxy:
+
+```yaml
+labels:
+  caddy.domain: "example.com"      # Required: Domain name
+  caddy.port: "8080"               # Optional: Port (defaults to first exposed port)
+  caddy.path: "/"                  # Optional: Path prefix (defaults to /)
+  caddy.tls: "auto"                # Optional: TLS config (auto, off, or custom)
+```
+
 ## Project Structure
 
 ```
@@ -169,8 +227,13 @@ gintainer/
 │   └── gintainer/          # Main application entry point
 │       └── main.go
 ├── internal/
+│   ├── caddy/              # Caddy integration
+│   │   └── caddy.go
+│   ├── config/             # Configuration management
+│   │   └── config.go
 │   ├── handlers/           # HTTP request handlers
 │   │   ├── handlers.go
+│   │   ├── caddy.go
 │   │   └── scheduler.go
 │   ├── models/             # Data models
 │   │   └── container.go

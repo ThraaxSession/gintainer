@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/ThraaxSession/gintainer/internal/caddy"
 	"github.com/ThraaxSession/gintainer/internal/config"
 	"github.com/ThraaxSession/gintainer/internal/handlers"
 	"github.com/ThraaxSession/gintainer/internal/models"
@@ -78,10 +79,17 @@ func main() {
 	sched.Start()
 	defer sched.Stop()
 
+	// Initialize Caddy service
+	caddyService := caddy.NewService(&cfg.Caddy)
+	if cfg.Caddy.Enabled {
+		log.Println("Caddy integration enabled")
+	}
+
 	// Initialize handlers
-	handler := handlers.NewHandler(runtimeManager)
+	handler := handlers.NewHandler(runtimeManager, caddyService)
 	schedulerHandler := handlers.NewSchedulerHandler(sched)
 	webHandler := handlers.NewWebHandler(runtimeManager, configManager)
+	caddyHandler := handlers.NewCaddyHandler(caddyService)
 
 	// Set up Gin router
 	router := gin.Default()
@@ -126,6 +134,16 @@ func main() {
 		api.GET("/scheduler/config", schedulerHandler.GetConfig)
 		api.PUT("/scheduler/config", schedulerHandler.UpdateConfig)
 
+		// Caddy routes (only enabled when Caddy integration is enabled)
+		if cfg.Caddy.Enabled {
+			api.GET("/caddy/status", caddyHandler.GetStatus)
+			api.GET("/caddy/files", caddyHandler.ListCaddyfiles)
+			api.GET("/caddy/files/:id", caddyHandler.GetCaddyfile)
+			api.PUT("/caddy/files/:id", caddyHandler.UpdateCaddyfile)
+			api.DELETE("/caddy/files/:id", caddyHandler.DeleteCaddyfile)
+			api.POST("/caddy/reload", caddyHandler.ReloadCaddy)
+		}
+
 		// Config routes
 		api.GET("/config", webHandler.GetConfig)
 		api.POST("/config", webHandler.UpdateConfigAPI)
@@ -143,6 +161,14 @@ func main() {
 		}
 		if err := sched.UpdateConfig(schedConfig); err != nil {
 			log.Printf("Error updating scheduler config: %v", err)
+		}
+
+		// Update Caddy service if config changed
+		caddyService.UpdateConfig(&newConfig.Caddy)
+		if newConfig.Caddy.Enabled {
+			log.Println("Caddy integration enabled via config reload")
+		} else {
+			log.Println("Caddy integration disabled via config reload")
 		}
 	})
 	configManager.StartWatching()

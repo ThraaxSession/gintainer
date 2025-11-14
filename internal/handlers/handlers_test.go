@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/ThraaxSession/gintainer/internal/caddy"
+	"github.com/ThraaxSession/gintainer/internal/config"
 	"github.com/ThraaxSession/gintainer/internal/runtime"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +18,8 @@ func TestHealthCheck(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.GET("/health", handler.HealthCheck)
@@ -37,7 +40,8 @@ func TestListContainersWithoutRuntime(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.GET("/api/containers", handler.ListContainers)
@@ -54,7 +58,8 @@ func TestListContainersAll(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.GET("/api/containers", handler.ListContainers)
@@ -70,7 +75,8 @@ func TestDeleteContainerWithoutRuntime(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.DELETE("/api/containers/:id", handler.DeleteContainer)
@@ -86,7 +92,8 @@ func TestStartContainerWithoutRuntime(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.POST("/api/containers/:id/start", handler.StartContainer)
@@ -102,7 +109,8 @@ func TestStopContainerWithoutRuntime(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.POST("/api/containers/:id/stop", handler.StopContainer)
@@ -118,7 +126,8 @@ func TestRestartContainerWithoutRuntime(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.POST("/api/containers/:id/restart", handler.RestartContainer)
@@ -134,7 +143,8 @@ func TestCreateContainerInvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	runtimeManager := runtime.NewManager()
-	handler := NewHandler(runtimeManager)
+	caddyService := caddy.NewService(&config.CaddyConfig{Enabled: false})
+	handler := NewHandler(runtimeManager, caddyService)
 
 	router := gin.New()
 	router.POST("/api/containers", handler.CreateContainer)
