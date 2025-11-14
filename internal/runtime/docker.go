@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -67,7 +68,7 @@ func (d *DockerRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 			})
 		}
 
-		result = append(result, models.ContainerInfo{
+		containerInfo := models.ContainerInfo{
 			ID:      c.ID,
 			Name:    name,
 			Image:   c.Image,
@@ -77,10 +78,92 @@ func (d *DockerRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 			Created: time.Unix(c.Created, 0),
 			Labels:  c.Labels,
 			Ports:   ports,
-		})
+		}
+
+		// Check if container is privileged by inspecting it
+		if filterOpts.IncludePrivileged {
+			inspect, err := d.client.ContainerInspect(ctx, c.ID)
+			if err == nil && inspect.HostConfig != nil {
+				containerInfo.Privileged = inspect.HostConfig.Privileged
+			}
+		}
+
+		// Get stats if requested and container is running
+		if filterOpts.IncludeStats && c.State == "running" {
+			stats, err := d.getContainerStats(ctx, c.ID)
+			if err == nil {
+				containerInfo.Stats = stats
+			}
+		}
+
+		result = append(result, containerInfo)
 	}
 
 	return result, nil
+}
+
+// getContainerStats retrieves real-time stats for a container
+func (d *DockerRuntime) getContainerStats(ctx context.Context, containerID string) (*models.ContainerStats, error) {
+	stats, err := d.client.ContainerStats(ctx, containerID, false)
+	if err != nil {
+		return nil, err
+	}
+	defer stats.Body.Close()
+
+	var v container.StatsResponse
+	if err := json.NewDecoder(stats.Body).Decode(&v); err != nil {
+		return nil, err
+	}
+
+	// Calculate CPU percentage
+	cpuPercent := calculateCPUPercent(&v)
+
+	// Calculate memory percentage
+	memPercent := 0.0
+	if v.MemoryStats.Limit > 0 {
+		memPercent = float64(v.MemoryStats.Usage) / float64(v.MemoryStats.Limit) * 100.0
+	}
+
+	// Calculate network I/O
+	var networkRx, networkTx uint64
+	for _, net := range v.Networks {
+		networkRx += net.RxBytes
+		networkTx += net.TxBytes
+	}
+
+	// Calculate block I/O
+	var blockRead, blockWrite uint64
+	for _, bio := range v.BlkioStats.IoServiceBytesRecursive {
+		if bio.Op == "Read" {
+			blockRead += bio.Value
+		} else if bio.Op == "Write" {
+			blockWrite += bio.Value
+		}
+	}
+
+	return &models.ContainerStats{
+		CPUPercent:    cpuPercent,
+		MemoryUsage:   v.MemoryStats.Usage,
+		MemoryLimit:   v.MemoryStats.Limit,
+		MemoryPercent: memPercent,
+		NetworkRx:     networkRx,
+		NetworkTx:     networkTx,
+		BlockRead:     blockRead,
+		BlockWrite:    blockWrite,
+		PIDs:          v.PidsStats.Current,
+	}, nil
+}
+
+// calculateCPUPercent calculates CPU usage percentage
+func calculateCPUPercent(stats *container.StatsResponse) float64 {
+	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
+	cpuCount := float64(stats.CPUStats.OnlineCPUs)
+
+	if systemDelta > 0 && cpuDelta > 0 {
+		return (cpuDelta / systemDelta) * cpuCount * 100.0
+	}
+	return 0.0
 }
 
 // ListPods returns an empty list (Docker doesn't have pods)

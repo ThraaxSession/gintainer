@@ -45,7 +45,7 @@
                 <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" id="filterStatus" onchange="loadContainers()"><option value="">All</option><option value="running">Running</option><option value="exited">Exited</option></select></div>
                 <div class="col-md-4"><label class="form-label">Name</label><input type="text" class="form-control" id="filterName" placeholder="Filter by name" onkeyup="loadContainers()"></div>
             </div></div></div></div></div>
-            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><button class="btn btn-gradient btn-sm" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="5" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
+            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><button class="btn btn-gradient btn-sm" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Created</th><th>CPU</th><th>Memory</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="8" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
         </main>
     </div></div>
     <div class="modal fade" id="buildModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Build from Dockerfile</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form id="buildForm" class="needs-validation" novalidate><div class="mb-3"><label class="form-label">Image Name <span class="text-danger">*</span></label><input type="text" class="form-control" id="imageName" placeholder="my-image:latest" required pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]*(/[a-zA-Z0-9][a-zA-Z0-9_.-]*)*(:[a-zA-Z0-9_.-]+)?$"><div class="invalid-feedback">Please provide a valid image name (e.g., my-image:latest)</div></div><div class="mb-3"><label class="form-label">Runtime <span class="text-danger">*</span></label><select class="form-select" id="buildRuntime" required><option value="docker">Docker</option><option value="podman">Podman</option></select></div><div class="mb-3"><label class="form-label">Dockerfile <span class="text-danger">*</span></label><textarea class="form-control" id="dockerfile" rows="10" placeholder="FROM alpine:latest" required minlength="10"></textarea><div class="invalid-feedback">Please provide Dockerfile content</div></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-gradient" onclick="buildImage()">Build</button></div></div></div></div>
@@ -66,7 +66,9 @@ function showToast(message, type = 'info') {
 
 function loadContainers() {
     const rt = document.getElementById('filterRuntime').value, st = document.getElementById('filterStatus').value, nm = document.getElementById('filterName').value;
-    let url = `/api/containers?runtime=${rt}`; if (st) url += `&status=${st}`; if (nm) url += `&name=${nm}`;
+    let url = `/api/containers?runtime=${rt}&include_stats=true&include_privileged=true`;
+    if (st) url += `&status=${st}`;
+    if (nm) url += `&name=${nm}`;
     fetch(url)
         .then(r => {
             if (!r.ok) throw new Error('Failed to load containers');
@@ -74,15 +76,29 @@ function loadContainers() {
         })
         .then(data=>{
             const c = data.containers || []; const tbody = document.getElementById('containerList');
-            tbody.innerHTML = c.length===0 ? '<tr><td colspan="5" class="text-center">No containers</td></tr>' :
-                c.map(x=>`<tr><td>${x.name}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>
-                    ${x.state==='running'?`<button class="btn btn-sm btn-warning" onclick="stopContainer('${x.id}','${x.runtime}')"><i class="bi bi-stop-circle"></i></button>`:`<button class="btn btn-sm btn-success" onclick="startContainer('${x.id}','${x.runtime}')"><i class="bi bi-play-circle"></i></button>`}
-                    <button class="btn btn-sm btn-info" onclick="restartContainer('${x.id}','${x.runtime}')"><i class="bi bi-arrow-clockwise"></i></button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="viewLogs('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-file-text"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteContainer('${x.id}','${x.runtime}')"><i class="bi bi-trash"></i></button>
-                </td></tr>`).join('');
+            tbody.innerHTML = c.length===0 ? '<tr><td colspan="8" class="text-center">No containers</td></tr>' :
+                c.map(x => {
+                    const created = new Date(x.created).toLocaleDateString();
+                    const cpuDisplay = x.stats && x.state === 'running' ? `${x.stats.cpu_percent.toFixed(1)}%` : '-';
+                    const memDisplay = x.stats && x.state === 'running' ? formatBytes(x.stats.memory_usage) : '-';
+                    const privilegedBadge = x.privileged ? '<span class="badge bg-warning text-dark ms-1" title="Privileged"><i class="bi bi-shield-lock"></i></span>' : '';
+                    return `<tr><td>${x.name}${privilegedBadge}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>${created}</td><td>${cpuDisplay}</td><td>${memDisplay}</td><td>
+                        ${x.state==='running'?`<button class="btn btn-sm btn-warning" onclick="stopContainer('${x.id}','${x.runtime}')"><i class="bi bi-stop-circle"></i></button>`:`<button class="btn btn-sm btn-success" onclick="startContainer('${x.id}','${x.runtime}')"><i class="bi bi-play-circle"></i></button>`}
+                        <button class="btn btn-sm btn-info" onclick="restartContainer('${x.id}','${x.runtime}')"><i class="bi bi-arrow-clockwise"></i></button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewLogs('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-file-text"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteContainer('${x.id}','${x.runtime}')"><i class="bi bi-trash"></i></button>
+                    </td></tr>`;
+                }).join('');
         })
         .catch(err => showToast('Error loading containers: ' + err.message, 'error'));
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
 function buildImage() {

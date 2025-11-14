@@ -80,7 +80,7 @@ func (w *WebHandler) GetConfig(c *gin.Context) {
 // UpdateConfigAPI handles POST /api/config
 func (w *WebHandler) UpdateConfigAPI(c *gin.Context) {
 	log.Printf("[INFO] UpdateConfigAPI: Received configuration update request from %s", c.ClientIP())
-	
+
 	var cfg config.Config
 	if err := c.ShouldBindJSON(&cfg); err != nil {
 		log.Printf("[ERROR] UpdateConfigAPI: Invalid request body: %v", err)
@@ -88,7 +88,7 @@ func (w *WebHandler) UpdateConfigAPI(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] UpdateConfigAPI: Updating configuration - Server Port: %s, Mode: %s, Docker: %v, Podman: %v", 
+	log.Printf("[INFO] UpdateConfigAPI: Updating configuration - Server Port: %s, Mode: %s, Docker: %v, Podman: %v",
 		cfg.Server.Port, cfg.Server.Mode, cfg.Docker.Enabled, cfg.Podman.Enabled)
 
 	if err := w.configManager.UpdateConfig(&cfg); err != nil {

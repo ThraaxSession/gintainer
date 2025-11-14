@@ -28,7 +28,7 @@ func NewHandler(runtimeManager *runtime.Manager, caddyService *caddy.Service) *H
 // ListContainers handles GET /api/containers
 func (h *Handler) ListContainers(c *gin.Context) {
 	log.Printf("[INFO] ListContainers: Received request from %s", c.ClientIP())
-	
+
 	var filters models.FilterOptions
 	if err := c.ShouldBindQuery(&filters); err != nil {
 		log.Printf("[ERROR] ListContainers: Failed to bind query parameters: %v", err)
@@ -41,7 +41,7 @@ func (h *Handler) ListContainers(c *gin.Context) {
 		filters.Runtime = "all"
 	}
 
-	log.Printf("[INFO] ListContainers: Filters applied - Runtime: %s, Status: %s, Name: %s", 
+	log.Printf("[INFO] ListContainers: Filters applied - Runtime: %s, Status: %s, Name: %s",
 		filters.Runtime, filters.Status, filters.Name)
 
 	var allContainers []models.ContainerInfo
@@ -83,7 +83,7 @@ func (h *Handler) ListContainers(c *gin.Context) {
 // ListPods handles GET /api/pods
 func (h *Handler) ListPods(c *gin.Context) {
 	log.Printf("[INFO] ListPods: Received request from %s", c.ClientIP())
-	
+
 	var filters models.FilterOptions
 	if err := c.ShouldBindQuery(&filters); err != nil {
 		log.Printf("[ERROR] ListPods: Failed to bind query parameters: %v", err)
@@ -127,7 +127,7 @@ func (h *Handler) DeleteContainer(c *gin.Context) {
 	runtimeName := c.Query("runtime")
 	force := c.Query("force") == "true"
 
-	log.Printf("[INFO] DeleteContainer: Request to delete container %s (runtime: %s, force: %v)", 
+	log.Printf("[INFO] DeleteContainer: Request to delete container %s (runtime: %s, force: %v)",
 		containerID, runtimeName, force)
 
 	if runtimeName == "" {
@@ -364,7 +364,7 @@ func (h *Handler) RestartPod(c *gin.Context) {
 // CreateContainer handles POST /api/containers
 func (h *Handler) CreateContainer(c *gin.Context) {
 	log.Printf("[INFO] CreateContainer: Received container creation request")
-	
+
 	var req models.CreateContainerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.Printf("[ERROR] CreateContainer: Invalid request body: %v", err)

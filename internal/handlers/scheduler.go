@@ -31,7 +31,7 @@ func (sh *SchedulerHandler) GetConfig(c *gin.Context) {
 // UpdateConfig handles PUT /api/scheduler/config
 func (sh *SchedulerHandler) UpdateConfig(c *gin.Context) {
 	log.Printf("[INFO] UpdateConfig: Received scheduler configuration update request from %s", c.ClientIP())
-	
+
 	var config models.CronJobConfig
 	if err := c.ShouldBindJSON(&config); err != nil {
 		log.Printf("[ERROR] UpdateConfig: Invalid request body: %v", err)
@@ -39,7 +39,7 @@ func (sh *SchedulerHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] UpdateConfig: Updating scheduler - Enabled: %v, Schedule: %s, Filters: %v", 
+	log.Printf("[INFO] UpdateConfig: Updating scheduler - Enabled: %v, Schedule: %s, Filters: %v",
 		config.Enabled, config.Schedule, config.Filters)
 
 	if err := sh.scheduler.UpdateConfig(config); err != nil {

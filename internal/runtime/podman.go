@@ -55,6 +55,26 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		})
 	}
 
+	// Add privileged and stats support if requested
+	for i := range containers {
+		if filterOpts.IncludePrivileged {
+			// Check if container is privileged using podman inspect
+			inspectCmd := exec.CommandContext(ctx, "podman", "inspect", "--format", "{{.HostConfig.Privileged}}", containers[i].ID)
+			if out, err := inspectCmd.Output(); err == nil {
+				containers[i].Privileged = strings.TrimSpace(string(out)) == "true"
+			}
+		}
+
+		if filterOpts.IncludeStats && containers[i].State == "running" {
+			// Get stats for running containers
+			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containers[i].ID)
+			if statsOut, err := statsCmd.Output(); err == nil && len(statsOut) > 0 {
+				// Parse podman stats output and populate containers[i].Stats
+				// This is a placeholder - proper JSON parsing needed
+			}
+		}
+	}
+
 	return containers, nil
 }
 
