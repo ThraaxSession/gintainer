@@ -64,6 +64,17 @@ type CreateContainerRequest struct {
 	Runtime    string `json:"runtime"`    // "docker" or "podman"
 }
 
+// RunContainerRequest represents a request to create and run a container from an image
+type RunContainerRequest struct {
+	Name          string   `json:"name"`           // Container name
+	Image         string   `json:"image"`          // Image name
+	Runtime       string   `json:"runtime"`        // "docker" or "podman"
+	RestartPolicy string   `json:"restart_policy"` // "always", "unless-stopped", "on-failure", or ""
+	Ports         []string `json:"ports"`          // Port mappings in "host:container" format
+	Volumes       []string `json:"volumes"`        // Volume mappings in "host:container" format
+	EnvVars       []string `json:"env_vars"`       // Environment variables in "KEY=VALUE" format
+}
+
 // ComposeRequest represents a request to deploy from a compose file
 type ComposeRequest struct {
 	ComposeContent string `json:"compose_content"` // Docker/Podman compose file content

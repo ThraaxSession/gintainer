@@ -2,12 +2,14 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ThraaxSession/gintainer/internal/models"
 )
@@ -43,16 +45,58 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		return nil, fmt.Errorf("failed to list Podman containers: %w", err)
 	}
 
-	// Parse JSON output
-	// Note: This is simplified - in production, parse the actual JSON
-	var containers []models.ContainerInfo
+	// Parse JSON output from podman
+	var podmanContainers []struct {
+		ID      string            `json:"Id"`
+		Names   []string          `json:"Names"`
+		Image   string            `json:"Image"`
+		Status  string            `json:"Status"`
+		State   string            `json:"State"`
+		Created int64             `json:"Created"`
+		Labels  map[string]string `json:"Labels"`
+		Ports   []struct {
+			HostPort      int    `json:"host_port"`
+			ContainerPort int    `json:"container_port"`
+			Protocol      string `json:"protocol"`
+		} `json:"Ports"`
+	}
 
 	if len(output) > 0 {
-		// For now, return basic info
-		// In a real implementation, you'd properly parse the JSON
-		containers = append(containers, models.ContainerInfo{
+		if err := json.Unmarshal(output, &podmanContainers); err != nil {
+			return nil, fmt.Errorf("failed to parse podman output: %w", err)
+		}
+	}
+
+	// Convert to common ContainerInfo format
+	containers := make([]models.ContainerInfo, 0, len(podmanContainers))
+	for _, pc := range podmanContainers {
+		name := ""
+		if len(pc.Names) > 0 {
+			name = pc.Names[0]
+		}
+
+		ports := make([]models.PortMapping, 0, len(pc.Ports))
+		for _, p := range pc.Ports {
+			ports = append(ports, models.PortMapping{
+				ContainerPort: p.ContainerPort,
+				HostPort:      p.HostPort,
+				Protocol:      p.Protocol,
+			})
+		}
+
+		containerInfo := models.ContainerInfo{
+			ID:      pc.ID,
+			Name:    name,
+			Image:   pc.Image,
+			Status:  pc.Status,
+			State:   pc.State,
 			Runtime: "podman",
-		})
+			Created: time.Unix(pc.Created, 0),
+			Labels:  pc.Labels,
+			Ports:   ports,
+		}
+
+		containers = append(containers, containerInfo)
 	}
 
 	// Add privileged and stats support if requested
@@ -95,13 +139,31 @@ func (p *PodmanRuntime) ListPods(ctx context.Context, filterOpts models.FilterOp
 		return nil, fmt.Errorf("failed to list Podman pods: %w", err)
 	}
 
-	// Parse JSON output
-	var pods []models.PodInfo
+	// Parse JSON output from podman
+	var podmanPods []struct {
+		ID         string   `json:"Id"`
+		Name       string   `json:"Name"`
+		Status     string   `json:"Status"`
+		Created    int64    `json:"Created"`
+		Containers []string `json:"Containers"`
+	}
 
 	if len(output) > 0 {
-		// For now, return basic info
+		if err := json.Unmarshal(output, &podmanPods); err != nil {
+			return nil, fmt.Errorf("failed to parse podman pod output: %w", err)
+		}
+	}
+
+	// Convert to PodInfo format
+	pods := make([]models.PodInfo, 0, len(podmanPods))
+	for _, pp := range podmanPods {
 		pods = append(pods, models.PodInfo{
-			Runtime: "podman",
+			ID:         pp.ID,
+			Name:       pp.Name,
+			Status:     pp.Status,
+			Created:    time.Unix(pp.Created, 0),
+			Containers: pp.Containers,
+			Runtime:    "podman",
 		})
 	}
 
@@ -214,6 +276,45 @@ func (p *PodmanRuntime) BuildFromDockerfile(ctx context.Context, dockerfile, ima
 	}
 
 	return nil
+}
+
+// RunContainer creates and runs a container from an image with configuration
+func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContainerRequest) (string, error) {
+	args := []string{"run", "-d", "--name", req.Name}
+
+	// Add restart policy
+	if req.RestartPolicy != "" {
+		args = append(args, "--restart", req.RestartPolicy)
+	}
+
+	// Add port mappings
+	for _, portMap := range req.Ports {
+		args = append(args, "-p", portMap)
+	}
+
+	// Add volume mappings
+	for _, volMap := range req.Volumes {
+		args = append(args, "-v", volMap)
+	}
+
+	// Add environment variables
+	for _, env := range req.EnvVars {
+		args = append(args, "-e", env)
+	}
+
+	// Add image name
+	args = append(args, req.Image)
+
+	// Run the container
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run container: %w", err)
+	}
+
+	// Container ID is returned in output
+	containerID := strings.TrimSpace(string(output))
+	return containerID, nil
 }
 
 // DeployFromCompose deploys containers from a Podman Compose file

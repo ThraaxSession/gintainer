@@ -395,6 +395,41 @@ func (h *Handler) CreateContainer(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "image built successfully", "image": req.ImageName})
 }
 
+// RunContainer handles POST /api/containers/run
+func (h *Handler) RunContainer(c *gin.Context) {
+	log.Printf("[INFO] RunContainer: Received container run request from %s", c.ClientIP())
+
+	var req models.RunContainerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[ERROR] RunContainer: Invalid request body: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Runtime == "" {
+		req.Runtime = "docker"
+	}
+
+	log.Printf("[INFO] RunContainer: Creating container %s from image %s using runtime %s", req.Name, req.Image, req.Runtime)
+
+	rt, ok := h.runtimeManager.GetRuntime(req.Runtime)
+	if !ok {
+		log.Printf("[ERROR] RunContainer: Invalid runtime: %s", req.Runtime)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	containerID, err := rt.RunContainer(c.Request.Context(), req)
+	if err != nil {
+		log.Printf("[ERROR] RunContainer: Failed to run container: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[INFO] RunContainer: Successfully created container %s with ID %s", req.Name, containerID)
+	c.JSON(http.StatusOK, gin.H{"message": "container created successfully", "container_id": containerID})
+}
+
 // DeployCompose handles POST /api/compose
 func (h *Handler) DeployCompose(c *gin.Context) {
 	var req models.ComposeRequest

@@ -45,9 +45,10 @@
                 <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" id="filterStatus" onchange="loadContainers()"><option value="">All</option><option value="running">Running</option><option value="exited">Exited</option></select></div>
                 <div class="col-md-4"><label class="form-label">Name</label><input type="text" class="form-control" id="filterName" placeholder="Filter by name" onkeyup="loadContainers()"></div>
             </div></div></div></div></div>
-            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><button class="btn btn-gradient btn-sm" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Created</th><th>CPU</th><th>Memory</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="8" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
+            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><div><button class="btn btn-gradient btn-sm me-2" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-play-circle"></i> Create</button><button class="btn btn-gradient btn-sm" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Ports</th><th>Created</th><th>CPU</th><th>Memory</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="9" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
         </main>
     </div></div>
+    <div class="modal fade" id="createModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Create Container from Image</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form id="createForm" class="needs-validation" novalidate><div class="mb-3"><label class="form-label">Container Name <span class="text-danger">*</span></label><input type="text" class="form-control" id="containerName" placeholder="my-container" required pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"><div class="invalid-feedback">Please provide a valid container name</div></div><div class="mb-3"><label class="form-label">Image <span class="text-danger">*</span></label><input type="text" class="form-control" id="containerImage" placeholder="nginx:latest" required><div class="invalid-feedback">Please provide an image name</div></div><div class="mb-3"><label class="form-label">Runtime <span class="text-danger">*</span></label><select class="form-select" id="createRuntime" required><option value="docker">Docker</option><option value="podman">Podman</option></select></div><div class="mb-3"><label class="form-label">Restart Policy</label><select class="form-select" id="restartPolicy"><option value="">No</option><option value="always">Always</option><option value="unless-stopped">Unless Stopped</option><option value="on-failure">On Failure</option></select></div><div class="mb-3"><label class="form-label">Port Mappings</label><div id="portMappings"><div class="input-group mb-2"><input type="number" class="form-control" placeholder="Host Port (e.g., 8080)" id="hostPort0"><input type="number" class="form-control" placeholder="Container Port (e.g., 80)" id="containerPort0"><button type="button" class="btn btn-outline-secondary" onclick="addPortMapping()"><i class="bi bi-plus"></i></button></div></div><small class="text-muted">Format: HostPort:ContainerPort</small></div><div class="mb-3"><label class="form-label">Volumes</label><div id="volumeMappings"><div class="input-group mb-2"><input type="text" class="form-control" placeholder="Host Path (e.g., /host/data)" id="hostPath0"><input type="text" class="form-control" placeholder="Container Path (e.g., /data)" id="containerPath0"><button type="button" class="btn btn-outline-secondary" onclick="addVolumeMapping()"><i class="bi bi-plus"></i></button></div></div><small class="text-muted">Format: HostPath:ContainerPath</small></div><div class="mb-3"><label class="form-label">Environment Variables</label><textarea class="form-control" id="envVars" rows="3" placeholder="KEY1=value1&#10;KEY2=value2"></textarea><small class="text-muted">One per line in KEY=VALUE format</small></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-gradient" onclick="createContainer()">Create</button></div></div></div></div>
     <div class="modal fade" id="buildModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Build from Dockerfile</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form id="buildForm" class="needs-validation" novalidate><div class="mb-3"><label class="form-label">Image Name <span class="text-danger">*</span></label><input type="text" class="form-control" id="imageName" placeholder="my-image:latest" required pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]*(/[a-zA-Z0-9][a-zA-Z0-9_.-]*)*(:[a-zA-Z0-9_.-]+)?$"><div class="invalid-feedback">Please provide a valid image name (e.g., my-image:latest)</div></div><div class="mb-3"><label class="form-label">Runtime <span class="text-danger">*</span></label><select class="form-select" id="buildRuntime" required><option value="docker">Docker</option><option value="podman">Podman</option></select></div><div class="mb-3"><label class="form-label">Dockerfile <span class="text-danger">*</span></label><textarea class="form-control" id="dockerfile" rows="10" placeholder="FROM alpine:latest" required minlength="10"></textarea><div class="invalid-feedback">Please provide Dockerfile content</div></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-gradient" onclick="buildImage()">Build</button></div></div></div></div>
     <div class="modal fade" id="logsModal" tabindex="-1"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Container Logs: <span id="logContainerName"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="log-viewer" id="logContent">Loading...</div></div></div></div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -76,13 +77,14 @@ function loadContainers() {
         })
         .then(data=>{
             const c = data.containers || []; const tbody = document.getElementById('containerList');
-            tbody.innerHTML = c.length===0 ? '<tr><td colspan="8" class="text-center">No containers</td></tr>' :
+            tbody.innerHTML = c.length===0 ? '<tr><td colspan="9" class="text-center">No containers</td></tr>' :
                 c.map(x => {
                     const created = new Date(x.created).toLocaleDateString();
                     const cpuDisplay = x.stats && x.state === 'running' ? `${x.stats.cpu_percent.toFixed(1)}%` : '-';
                     const memDisplay = x.stats && x.state === 'running' ? formatBytes(x.stats.memory_usage) : '-';
                     const privilegedBadge = x.privileged ? '<span class="badge bg-warning text-dark ms-1" title="Privileged"><i class="bi bi-shield-lock"></i></span>' : '';
-                    return `<tr><td>${x.name}${privilegedBadge}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>${created}</td><td>${cpuDisplay}</td><td>${memDisplay}</td><td>
+                    const portsDisplay = x.ports && x.ports.length > 0 ? x.ports.map(p => `${p.host_port}:${p.container_port}`).join(', ') : '-';
+                    return `<tr><td>${x.name}${privilegedBadge}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>${portsDisplay}</td><td>${created}</td><td>${cpuDisplay}</td><td>${memDisplay}</td><td>
                         ${x.state==='running'?`<button class="btn btn-sm btn-warning" onclick="stopContainer('${x.id}','${x.runtime}')"><i class="bi bi-stop-circle"></i></button>`:`<button class="btn btn-sm btn-success" onclick="startContainer('${x.id}','${x.runtime}')"><i class="bi bi-play-circle"></i></button>`}
                         <button class="btn btn-sm btn-info" onclick="restartContainer('${x.id}','${x.runtime}')"><i class="bi bi-arrow-clockwise"></i></button>
                         <button class="btn btn-sm btn-outline-primary" onclick="viewLogs('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-file-text"></i></button>
@@ -99,6 +101,88 @@ function formatBytes(bytes) {
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+let portCounter = 1;
+let volumeCounter = 1;
+
+function addPortMapping() {
+    const container = document.getElementById('portMappings');
+    const newMapping = `<div class="input-group mb-2"><input type="number" class="form-control" placeholder="Host Port" id="hostPort${portCounter}"><input type="number" class="form-control" placeholder="Container Port" id="containerPort${portCounter}"><button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button></div>`;
+    container.insertAdjacentHTML('beforeend', newMapping);
+    portCounter++;
+}
+
+function addVolumeMapping() {
+    const container = document.getElementById('volumeMappings');
+    const newMapping = `<div class="input-group mb-2"><input type="text" class="form-control" placeholder="Host Path" id="hostPath${volumeCounter}"><input type="text" class="form-control" placeholder="Container Path" id="containerPath${volumeCounter}"><button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button></div>`;
+    container.insertAdjacentHTML('beforeend', newMapping);
+    volumeCounter++;
+}
+
+function createContainer() {
+    const form = document.getElementById('createForm');
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        showToast('Please fill in all required fields correctly', 'error');
+        return;
+    }
+    
+    const name = document.getElementById('containerName').value;
+    const image = document.getElementById('containerImage').value;
+    const runtime = document.getElementById('createRuntime').value;
+    const restart = document.getElementById('restartPolicy').value;
+    
+    // Collect port mappings
+    const ports = [];
+    for (let i = 0; i < portCounter; i++) {
+        const hostPort = document.getElementById(`hostPort${i}`);
+        const containerPort = document.getElementById(`containerPort${i}`);
+        if (hostPort && containerPort && hostPort.value && containerPort.value) {
+            ports.push(`${hostPort.value}:${containerPort.value}`);
+        }
+    }
+    
+    // Collect volume mappings
+    const volumes = [];
+    for (let i = 0; i < volumeCounter; i++) {
+        const hostPath = document.getElementById(`hostPath${i}`);
+        const containerPath = document.getElementById(`containerPath${i}`);
+        if (hostPath && containerPath && hostPath.value && containerPath.value) {
+            volumes.push(`${hostPath.value}:${containerPath.value}`);
+        }
+    }
+    
+    // Parse environment variables
+    const envVarsText = document.getElementById('envVars').value;
+    const envVars = envVarsText.split('\n').filter(line => line.trim() && line.includes('=')).map(line => line.trim());
+    
+    const payload = {
+        name: name,
+        image: image,
+        runtime: runtime,
+        restart_policy: restart,
+        ports: ports,
+        volumes: volumes,
+        env_vars: envVars
+    };
+    
+    showToast('Creating container...', 'info');
+    fetch('/api/containers/run', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+        .then(r => { 
+            if (!r.ok) throw new Error('Failed to create container'); 
+            return r.json(); 
+        })
+        .then(() => { 
+            showToast('Container created successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+            form.classList.remove('was-validated');
+            form.reset();
+            portCounter = 1;
+            volumeCounter = 1;
+            loadContainers();
+        })
+        .catch(err => showToast('Error creating container: ' + err.message, 'error'));
 }
 
 function buildImage() {

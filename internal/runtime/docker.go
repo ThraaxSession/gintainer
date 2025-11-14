@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/go-connections/nat"
 )
 
 // DockerRuntime implements ContainerRuntime for Docker
@@ -273,6 +274,58 @@ func (d *DockerRuntime) BuildFromDockerfile(ctx context.Context, dockerfile, ima
 	}
 
 	return nil
+}
+
+// RunContainer creates and runs a container from an image with configuration
+func (d *DockerRuntime) RunContainer(ctx context.Context, req models.RunContainerRequest) (string, error) {
+	// Parse port bindings
+	portBindings := nat.PortMap{}
+	exposedPorts := nat.PortSet{}
+	for _, portMap := range req.Ports {
+		parts := strings.Split(portMap, ":")
+		if len(parts) == 2 {
+			containerPort, err := nat.NewPort("tcp", parts[1])
+			if err != nil {
+				continue
+			}
+			exposedPorts[containerPort] = struct{}{}
+			portBindings[containerPort] = []nat.PortBinding{
+				{HostPort: parts[0]},
+			}
+		}
+	}
+
+	// Parse volume bindings
+	binds := req.Volumes
+
+	// Create container config
+	config := &container.Config{
+		Image:        req.Image,
+		Env:          req.EnvVars,
+		ExposedPorts: exposedPorts,
+	}
+
+	// Create host config
+	hostConfig := &container.HostConfig{
+		PortBindings: portBindings,
+		Binds:        binds,
+		RestartPolicy: container.RestartPolicy{
+			Name: container.RestartPolicyMode(req.RestartPolicy),
+		},
+	}
+
+	// Create container
+	resp, err := d.client.ContainerCreate(ctx, config, hostConfig, nil, nil, req.Name)
+	if err != nil {
+		return "", fmt.Errorf("failed to create container: %w", err)
+	}
+
+	// Start container
+	if err := d.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return "", fmt.Errorf("failed to start container: %w", err)
+	}
+
+	return resp.ID, nil
 }
 
 // DeployFromCompose deploys containers from a Docker Compose file

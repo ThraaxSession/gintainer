@@ -113,6 +113,7 @@ func main() {
 		// Container routes
 		api.GET("/containers", handler.ListContainers)
 		api.POST("/containers", handler.CreateContainer)
+		api.POST("/containers/run", handler.RunContainer)
 		api.DELETE("/containers/:id", handler.DeleteContainer)
 		api.POST("/containers/:id/start", handler.StartContainer)
 		api.POST("/containers/:id/stop", handler.StopContainer)
