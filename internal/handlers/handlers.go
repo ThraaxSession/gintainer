@@ -82,8 +82,11 @@ func (h *Handler) ListContainers(c *gin.Context) {
 
 // ListPods handles GET /api/pods
 func (h *Handler) ListPods(c *gin.Context) {
+	log.Printf("[INFO] ListPods: Received request from %s", c.ClientIP())
+	
 	var filters models.FilterOptions
 	if err := c.ShouldBindQuery(&filters); err != nil {
+		log.Printf("[ERROR] ListPods: Failed to bind query parameters: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -93,23 +96,28 @@ func (h *Handler) ListPods(c *gin.Context) {
 		filters.Runtime = "podman"
 	}
 
+	log.Printf("[INFO] ListPods: Querying pods with filters - Name: %s, Status: %s", filters.Name, filters.Status)
+
 	var allPods []models.PodInfo
 
 	if filters.Runtime == "all" || filters.Runtime == "podman" {
 		rt, ok := h.runtimeManager.GetRuntime("podman")
 		if !ok {
+			log.Printf("[ERROR] ListPods: Podman runtime not available")
 			c.JSON(http.StatusBadRequest, gin.H{"error": "podman runtime not available"})
 			return
 		}
 
 		pods, err := rt.ListPods(c.Request.Context(), filters)
 		if err != nil {
+			log.Printf("[ERROR] ListPods: Failed to list pods: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		allPods = pods
 	}
 
+	log.Printf("[INFO] ListPods: Successfully retrieved %d pods", len(allPods))
 	c.JSON(http.StatusOK, gin.H{"pods": allPods})
 }
 
@@ -160,18 +168,23 @@ func (h *Handler) DeletePod(c *gin.Context) {
 	podID := c.Param("id")
 	force := c.Query("force") == "true"
 
+	log.Printf("[INFO] DeletePod: Request to delete pod %s (force: %v)", podID, force)
+
 	// Pods are only supported by Podman
 	rt, ok := h.runtimeManager.GetRuntime("podman")
 	if !ok {
+		log.Printf("[ERROR] DeletePod: Podman runtime not available")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "podman runtime not available"})
 		return
 	}
 
 	if err := rt.DeletePod(c.Request.Context(), podID, force); err != nil {
+		log.Printf("[ERROR] DeletePod: Failed to delete pod %s: %v", podID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[INFO] DeletePod: Successfully deleted pod %s", podID)
 	c.JSON(http.StatusOK, gin.H{"message": "pod deleted successfully"})
 }
 
