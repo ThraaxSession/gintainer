@@ -187,7 +187,7 @@ func (m *Manager) UpdateConfig(config *Config) error {
 	m.mu.Lock()
 	// Save old config in case reload fails
 	oldConfig := m.config
-	
+
 	log.Printf("[INFO] UpdateConfig: Config file saved successfully, reloading from file\n")
 	// Read from file
 	reloadData, err := os.ReadFile(m.filePath)
