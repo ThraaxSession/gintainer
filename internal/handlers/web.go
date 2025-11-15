@@ -88,8 +88,8 @@ func (w *WebHandler) UpdateConfigAPI(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] UpdateConfigAPI: Updating configuration - Server Port: %s, Mode: %s, Docker: %v, Podman: %v",
-		cfg.Server.Port, cfg.Server.Mode, cfg.Docker.Enabled, cfg.Podman.Enabled)
+	log.Printf("[INFO] UpdateConfigAPI: Updating configuration - Server Port: %s, Mode: %s, Docker: %v, Podman: %v, Theme: %s, BasePath: %s",
+		cfg.Server.Port, cfg.Server.Mode, cfg.Docker.Enabled, cfg.Podman.Enabled, cfg.UI.Theme, cfg.Deployment.BasePath)
 
 	if err := w.configManager.UpdateConfig(&cfg); err != nil {
 		log.Printf("[ERROR] UpdateConfigAPI: Failed to update configuration: %v", err)
@@ -97,6 +97,6 @@ func (w *WebHandler) UpdateConfigAPI(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] UpdateConfigAPI: Configuration updated successfully")
+	log.Printf("[INFO] UpdateConfigAPI: Configuration updated and saved successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "configuration updated successfully"})
 }

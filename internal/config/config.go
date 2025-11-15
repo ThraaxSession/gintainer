@@ -173,17 +173,20 @@ func (m *Manager) UpdateConfig(config *Config) error {
 	m.config = config
 	m.mu.Unlock()
 
+	fmt.Printf("[INFO] UpdateConfig: Marshaling config to YAML\n")
 	// Marshal to YAML
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
+	fmt.Printf("[INFO] UpdateConfig: Writing config to file: %s\n", m.filePath)
 	// Write to file
 	if err := os.WriteFile(m.filePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	fmt.Printf("[INFO] UpdateConfig: Config file saved successfully\n")
 	// Trigger onChange callback if set
 	if m.onChange != nil {
 		m.onChange(config)

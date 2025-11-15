@@ -207,8 +207,9 @@ document.getElementById('configForm').addEventListener('submit', function(e) {
         return r.json();
     })
     .then(() => {
-        showToast('Configuration saved! Restart may be required for some changes.', 'success');
-        load();
+        showToast('Configuration saved successfully!', 'success');
+        // Reload after a short delay to ensure file is written
+        setTimeout(() => load(), 500);
     })
     .catch(err => showToast('Error saving configuration: ' + err.message, 'error'));
 });
