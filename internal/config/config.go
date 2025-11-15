@@ -183,17 +183,39 @@ func (m *Manager) UpdateConfig(config *Config) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	// Acquire write lock for reloading
+	m.mu.Lock()
+	// Save old config in case reload fails
+	oldConfig := m.config
+	
 	log.Printf("[INFO] UpdateConfig: Config file saved successfully, reloading from file\n")
-	// Reload from file to ensure persistence
-	if err := m.loadConfig(); err != nil {
-		return fmt.Errorf("failed to reload config after save: %w", err)
+	// Read from file
+	reloadData, err := os.ReadFile(m.filePath)
+	if err != nil {
+		// Restore old config and release lock
+		m.mu.Unlock()
+		return fmt.Errorf("failed to read config after save: %w", err)
 	}
 
+	var reloadedConfig Config
+	if err := yaml.Unmarshal(reloadData, &reloadedConfig); err != nil {
+		// Restore old config and release lock
+		m.mu.Unlock()
+		return fmt.Errorf("failed to unmarshal config after save: %w", err)
+	}
+
+	// Update in-memory config
+	m.config = &reloadedConfig
+	m.mu.Unlock()
+
 	log.Printf("[INFO] UpdateConfig: Config reloaded successfully from file\n")
-	// Trigger onChange callback if set
+	// Trigger onChange callback if set (outside of lock to avoid deadlocks)
 	if m.onChange != nil {
 		m.onChange(m.GetConfig())
 	}
+
+	// Suppress unused variable warning
+	_ = oldConfig
 
 	return nil
 }
