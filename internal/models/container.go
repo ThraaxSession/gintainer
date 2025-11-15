@@ -4,17 +4,18 @@ import "time"
 
 // ContainerInfo represents container information across different runtimes
 type ContainerInfo struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Image      string            `json:"image"`
-	Status     string            `json:"status"`
-	State      string            `json:"state"`
-	Runtime    string            `json:"runtime"` // "docker" or "podman"
-	Created    time.Time         `json:"created"`
-	Labels     map[string]string `json:"labels,omitempty"`
-	Ports      []PortMapping     `json:"ports,omitempty"`
-	Stats      *ContainerStats   `json:"stats,omitempty"`
-	Privileged bool              `json:"privileged,omitempty"` // Whether container runs with elevated privileges
+	ID             string            `json:"id"`
+	Name           string            `json:"name"`
+	Image          string            `json:"image"`
+	Status         string            `json:"status"`
+	State          string            `json:"state"`
+	Runtime        string            `json:"runtime"` // "docker" or "podman"
+	Created        time.Time         `json:"created"`
+	Labels         map[string]string `json:"labels,omitempty"`
+	Ports          []PortMapping     `json:"ports,omitempty"`
+	Stats          *ContainerStats   `json:"stats,omitempty"`
+	Privileged     bool              `json:"privileged,omitempty"`      // Whether container runs with elevated privileges
+	DeploymentPath string            `json:"deployment_path,omitempty"` // Path where compose file is stored (if deployed from compose)
 }
 
 // ContainerStats represents real-time container statistics
@@ -39,12 +40,13 @@ type PortMapping struct {
 
 // PodInfo represents pod information (Podman-specific)
 type PodInfo struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Status     string    `json:"status"`
-	Created    time.Time `json:"created"`
-	Containers []string  `json:"containers,omitempty"`
-	Runtime    string    `json:"runtime"` // Always "podman"
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Status         string    `json:"status"`
+	Created        time.Time `json:"created"`
+	Containers     []string  `json:"containers,omitempty"`
+	Runtime        string    `json:"runtime"`                   // Always "podman"
+	DeploymentPath string    `json:"deployment_path,omitempty"` // Path where compose file is stored (if deployed from compose)
 }
 
 // FilterOptions represents filtering criteria
@@ -79,6 +81,7 @@ type RunContainerRequest struct {
 type ComposeRequest struct {
 	ComposeContent string `json:"compose_content"` // Docker/Podman compose file content
 	Runtime        string `json:"runtime"`         // "docker" or "podman"
+	ProjectName    string `json:"project_name"`    // Optional project name for the deployment
 }
 
 // UpdateRequest represents a request to update containers

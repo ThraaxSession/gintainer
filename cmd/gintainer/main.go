@@ -86,7 +86,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	handler := handlers.NewHandler(runtimeManager, caddyService)
+	handler := handlers.NewHandler(runtimeManager, caddyService, configManager)
 	schedulerHandler := handlers.NewSchedulerHandler(sched)
 	webHandler := handlers.NewWebHandler(runtimeManager, configManager)
 	caddyHandler := handlers.NewCaddyHandler(caddyService)

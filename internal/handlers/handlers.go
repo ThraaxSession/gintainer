@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
+	"time"
 
 	"github.com/ThraaxSession/gintainer/internal/caddy"
+	"github.com/ThraaxSession/gintainer/internal/config"
 	"github.com/ThraaxSession/gintainer/internal/models"
 	"github.com/ThraaxSession/gintainer/internal/runtime"
 	"github.com/gin-gonic/gin"
@@ -15,13 +19,15 @@ import (
 type Handler struct {
 	runtimeManager *runtime.Manager
 	caddyService   *caddy.Service
+	configManager  *config.Manager
 }
 
 // NewHandler creates a new handler
-func NewHandler(runtimeManager *runtime.Manager, caddyService *caddy.Service) *Handler {
+func NewHandler(runtimeManager *runtime.Manager, caddyService *caddy.Service, configManager *config.Manager) *Handler {
 	return &Handler{
 		runtimeManager: runtimeManager,
 		caddyService:   caddyService,
+		configManager:  configManager,
 	}
 }
 
@@ -445,7 +451,7 @@ func (h *Handler) DeployCompose(c *gin.Context) {
 		req.Runtime = "docker"
 	}
 
-	log.Printf("[INFO] DeployCompose: Deploying compose with runtime %s", req.Runtime)
+	log.Printf("[INFO] DeployCompose: Deploying compose with runtime %s, project name: %s", req.Runtime, req.ProjectName)
 
 	rt, ok := h.runtimeManager.GetRuntime(req.Runtime)
 	if !ok {
@@ -454,14 +460,34 @@ func (h *Handler) DeployCompose(c *gin.Context) {
 		return
 	}
 
-	if err := rt.DeployFromCompose(c.Request.Context(), req.ComposeContent); err != nil {
+	// Get base path from config
+	config := h.configManager.GetConfig()
+	basePath := config.Deployment.BasePath
+	if basePath == "" {
+		basePath = "./deployments"
+	}
+
+	// Create deployment directory with project name or timestamp
+	projectName := req.ProjectName
+	if projectName == "" {
+		projectName = fmt.Sprintf("deployment-%d", time.Now().Unix())
+	}
+	deploymentPath := filepath.Join(basePath, projectName)
+
+	log.Printf("[INFO] DeployCompose: Storing deployment at %s", deploymentPath)
+
+	if err := rt.DeployFromCompose(c.Request.Context(), req.ComposeContent, projectName, deploymentPath); err != nil {
 		log.Printf("[ERROR] DeployCompose: Failed to deploy compose: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("[INFO] DeployCompose: Successfully deployed compose")
-	c.JSON(http.StatusOK, gin.H{"message": "compose deployed successfully"})
+	log.Printf("[INFO] DeployCompose: Successfully deployed compose to %s", deploymentPath)
+	c.JSON(http.StatusOK, gin.H{
+		"message":         "compose deployed successfully",
+		"deployment_path": deploymentPath,
+		"project_name":    projectName,
+	})
 }
 
 // UpdateContainers handles POST /api/containers/update

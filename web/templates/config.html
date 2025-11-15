@@ -43,6 +43,7 @@
                 <h6 class="border-bottom pb-2 mb-3">Server</h6><div class="row"><div class="col-md-6 mb-3"><label class="form-label">Port <span class="text-danger">*</span></label><input type="text" class="form-control" id="port" placeholder="8080" required pattern="[0-9]+"></div><div class="col-md-6 mb-3"><label class="form-label">Mode <span class="text-danger">*</span></label><select class="form-select" id="mode" required><option value="debug">Debug</option><option value="release">Release</option></select></div></div>
                 <h6 class="border-bottom pb-2 mb-3 mt-4">Runtime</h6><div class="row"><div class="col-md-6 mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="docker"><label class="form-check-label" for="docker">Enable Docker</label></div></div><div class="col-md-6 mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="podman"><label class="form-check-label" for="podman">Enable Podman</label></div></div></div>
                 <h6 class="border-bottom pb-2 mb-3 mt-4">UI</h6><div class="row"><div class="col-md-6 mb-3"><label class="form-label">Title <span class="text-danger">*</span></label><input type="text" class="form-control" id="title" placeholder="Gintainer" required minlength="1"></div><div class="col-md-6 mb-3"><label class="form-label">Theme <span class="text-danger">*</span></label><select class="form-select" id="theme" required><option value="light">Light</option><option value="dark">Dark</option></select></div></div>
+                <h6 class="border-bottom pb-2 mb-3 mt-4">Deployment</h6><div class="row"><div class="col-md-12 mb-3"><label class="form-label">Base Path <span class="text-danger">*</span></label><input type="text" class="form-control" id="deploymentBasePath" placeholder="./deployments" required minlength="1"><small class="form-text text-muted">Directory where compose deployments will be stored</small></div></div>
                 <div id="caddySection"></div>
                 <button type="submit" class="btn btn-gradient"><i class="bi bi-save"></i> Save</button> <button type="button" class="btn btn-secondary" onclick="load()"><i class="bi bi-arrow-clockwise"></i> Reload</button>
             </form></div></div>
@@ -132,6 +133,7 @@ function load() {
             document.getElementById('podman').checked = c.podman?.enabled !== false;
             document.getElementById('title').value = c.ui?.title || 'Gintainer';
             document.getElementById('theme').value = c.ui?.theme || 'light';
+            document.getElementById('deploymentBasePath').value = c.deployment?.base_path || './deployments';
             renderCaddyConfig(c);
             showToast('Configuration loaded successfully', 'success');
         })
@@ -163,6 +165,9 @@ document.getElementById('configForm').addEventListener('submit', function(e) {
             title: document.getElementById('title').value,
             description: currentConfig.ui?.description || '',
             theme: document.getElementById('theme').value
+        },
+        deployment: {
+            base_path: document.getElementById('deploymentBasePath').value
         },
         scheduler: currentConfig.scheduler || {
             enabled: false,

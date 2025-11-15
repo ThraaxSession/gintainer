@@ -349,16 +349,30 @@ func (d *DockerRuntime) RunContainer(ctx context.Context, req models.RunContaine
 }
 
 // DeployFromCompose deploys containers from a Docker Compose file
-func (d *DockerRuntime) DeployFromCompose(ctx context.Context, composeContent string) error {
-	// Create a temporary directory for the compose file
-	tempDir, err := os.MkdirTemp("", "docker-compose-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
+func (d *DockerRuntime) DeployFromCompose(ctx context.Context, composeContent, projectName, deploymentPath string) error {
+	// Use deployment path if provided, otherwise use temp directory
+	var composePath string
+	var cleanupFunc func()
+
+	if deploymentPath != "" {
+		// Create deployment directory if it doesn't exist
+		if err := os.MkdirAll(deploymentPath, 0755); err != nil {
+			return fmt.Errorf("failed to create deployment directory: %w", err)
+		}
+		composePath = filepath.Join(deploymentPath, "docker-compose.yml")
+		cleanupFunc = func() {} // No cleanup for permanent deployments
+	} else {
+		// Create a temporary directory for the compose file
+		tempDir, err := os.MkdirTemp("", "docker-compose-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temp directory: %w", err)
+		}
+		composePath = filepath.Join(tempDir, "docker-compose.yml")
+		cleanupFunc = func() { os.RemoveAll(tempDir) }
 	}
-	defer os.RemoveAll(tempDir)
+	defer cleanupFunc()
 
 	// Write compose file
-	composePath := filepath.Join(tempDir, "docker-compose.yml")
 	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write compose file: %w", err)
 	}
@@ -366,12 +380,24 @@ func (d *DockerRuntime) DeployFromCompose(ctx context.Context, composeContent st
 	// Try docker compose (v2) first, then fall back to docker-compose (v1)
 	var cmd *exec.Cmd
 	if _, err := exec.LookPath("docker"); err == nil {
+		args := []string{"compose", "-f", composePath}
+		if projectName != "" {
+			args = append(args, "-p", projectName)
+		}
+		args = append(args, "up", "-d")
+
 		// Try docker compose (v2)
-		cmd = exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "up", "-d")
+		cmd = exec.CommandContext(ctx, "docker", args...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			// Try docker-compose (v1) as fallback
 			if _, err := exec.LookPath("docker-compose"); err == nil {
-				cmd = exec.CommandContext(ctx, "docker-compose", "-f", composePath, "up", "-d")
+				fallbackArgs := []string{"-f", composePath}
+				if projectName != "" {
+					fallbackArgs = append(fallbackArgs, "-p", projectName)
+				}
+				fallbackArgs = append(fallbackArgs, "up", "-d")
+
+				cmd = exec.CommandContext(ctx, "docker-compose", fallbackArgs...)
 				if output, err := cmd.CombinedOutput(); err != nil {
 					return fmt.Errorf("failed to deploy with docker-compose: %w, output: %s", err, string(output))
 				}

@@ -46,7 +46,7 @@ type ContainerRuntime interface {
 	RunContainer(ctx context.Context, req models.RunContainerRequest) (string, error)
 
 	// DeployFromCompose deploys containers from a compose file
-	DeployFromCompose(ctx context.Context, composeContent string) error
+	DeployFromCompose(ctx context.Context, composeContent, projectName, deploymentPath string) error
 
 	// PullImage pulls the latest version of an image
 	PullImage(ctx context.Context, imageName string) error

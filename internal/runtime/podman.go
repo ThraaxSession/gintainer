@@ -348,38 +348,53 @@ func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContaine
 }
 
 // DeployFromCompose deploys containers from a Podman Compose file
-func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent string) error {
-	// Create a temporary directory for the compose file
-	tempDir, err := os.MkdirTemp("", "podman-compose-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
-	}
-	defer os.RemoveAll(tempDir)
+func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent, projectName, deploymentPath string) error {
+	// Use deployment path if provided, otherwise use temp directory
+	var composePath string
+	var cleanupFunc func()
 
-	// Parse compose file to extract service names for meaningful pod name
-	projectName := ""
-	var compose struct {
-		Services map[string]interface{} `yaml:"services"`
+	if deploymentPath != "" {
+		// Create deployment directory if it doesn't exist
+		if err := os.MkdirAll(deploymentPath, 0755); err != nil {
+			return fmt.Errorf("failed to create deployment directory: %w", err)
+		}
+		composePath = filepath.Join(deploymentPath, "docker-compose.yml")
+		cleanupFunc = func() {} // No cleanup for permanent deployments
+	} else {
+		// Create a temporary directory for the compose file
+		tempDir, err := os.MkdirTemp("", "podman-compose-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temp directory: %w", err)
+		}
+		composePath = filepath.Join(tempDir, "docker-compose.yml")
+		cleanupFunc = func() { os.RemoveAll(tempDir) }
 	}
-	if err := yaml.Unmarshal([]byte(composeContent), &compose); err == nil && len(compose.Services) > 0 {
-		// Extract and sort service names
-		serviceNames := make([]string, 0, len(compose.Services))
-		for name := range compose.Services {
-			serviceNames = append(serviceNames, name)
-		}
-		sort.Strings(serviceNames)
+	defer cleanupFunc()
 
-		// Create project name from service names (limit to first 5 services to avoid too long names)
-		maxServices := 5
-		if len(serviceNames) > maxServices {
-			serviceNames = serviceNames[:maxServices]
+	// Parse compose file to extract service names for meaningful pod name (if projectName not provided)
+	if projectName == "" {
+		var compose struct {
+			Services map[string]interface{} `yaml:"services"`
 		}
-		// Use service names as project name which will be used by podman-compose for pod naming
-		projectName = strings.Join(serviceNames, "_")
+		if err := yaml.Unmarshal([]byte(composeContent), &compose); err == nil && len(compose.Services) > 0 {
+			// Extract and sort service names
+			serviceNames := make([]string, 0, len(compose.Services))
+			for name := range compose.Services {
+				serviceNames = append(serviceNames, name)
+			}
+			sort.Strings(serviceNames)
+
+			// Create project name from service names (limit to first 5 services to avoid too long names)
+			maxServices := 5
+			if len(serviceNames) > maxServices {
+				serviceNames = serviceNames[:maxServices]
+			}
+			// Use service names as project name which will be used by podman-compose for pod naming
+			projectName = strings.Join(serviceNames, "_")
+		}
 	}
 
 	// Write compose file
-	composePath := filepath.Join(tempDir, "docker-compose.yml")
 	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write compose file: %w", err)
 	}
@@ -387,7 +402,7 @@ func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent st
 	// Use podman-compose if available
 	if _, err := exec.LookPath("podman-compose"); err == nil {
 		args := []string{"-f", composePath}
-		// Add project name if we extracted service names
+		// Add project name if we have one
 		if projectName != "" {
 			args = append(args, "-p", projectName)
 		}

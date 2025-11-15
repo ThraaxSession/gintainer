@@ -11,13 +11,14 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Scheduler SchedulerConfig `yaml:"scheduler"`
-	Docker    RuntimeConfig   `yaml:"docker"`
-	Podman    RuntimeConfig   `yaml:"podman"`
-	Caddy     CaddyConfig     `yaml:"caddy"`
-	UI        UIConfig        `yaml:"ui"`
-	mu        sync.RWMutex
+	Server     ServerConfig     `yaml:"server"`
+	Scheduler  SchedulerConfig  `yaml:"scheduler"`
+	Docker     RuntimeConfig    `yaml:"docker"`
+	Podman     RuntimeConfig    `yaml:"podman"`
+	Caddy      CaddyConfig      `yaml:"caddy"`
+	UI         UIConfig         `yaml:"ui"`
+	Deployment DeploymentConfig `yaml:"deployment"`
+	mu         sync.RWMutex
 }
 
 // ServerConfig represents server configuration
@@ -54,6 +55,11 @@ type UIConfig struct {
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
 	Theme       string `yaml:"theme"` // "light" or "dark"
+}
+
+// DeploymentConfig represents deployment configuration
+type DeploymentConfig struct {
+	BasePath string `yaml:"base_path"` // Base path for storing compose deployments
 }
 
 // Manager manages configuration loading and hot-reload
@@ -126,6 +132,9 @@ func DefaultConfig() *Config {
 			Title:       "Gintainer",
 			Description: "Container & Pod Management",
 			Theme:       "light",
+		},
+		Deployment: DeploymentConfig{
+			BasePath: "./deployments",
 		},
 	}
 }
