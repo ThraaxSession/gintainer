@@ -310,8 +310,18 @@ func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContaine
 		args = append(args, "-p", portMap)
 	}
 
-	// Add volume mappings
+	// Create named volumes if needed and add volume mappings
 	for _, volMap := range req.Volumes {
+		parts := strings.Split(volMap, ":")
+		if len(parts) >= 2 {
+			volumeName := parts[0]
+			// Check if it's a named volume (doesn't start with / or .)
+			if !strings.HasPrefix(volumeName, "/") && !strings.HasPrefix(volumeName, ".") {
+				// Create named volume if it doesn't exist
+				createCmd := exec.CommandContext(ctx, "podman", "volume", "create", volumeName)
+				_ = createCmd.Run() // Ignore error if volume already exists
+			}
+		}
 		args = append(args, "-v", volMap)
 	}
 

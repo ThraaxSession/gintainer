@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/go-connections/nat"
@@ -295,8 +297,26 @@ func (d *DockerRuntime) RunContainer(ctx context.Context, req models.RunContaine
 		}
 	}
 
-	// Parse volume bindings
-	binds := req.Volumes
+	// Parse volume bindings and create named volumes if needed
+	binds := make([]string, 0, len(req.Volumes))
+	for _, vol := range req.Volumes {
+		parts := strings.Split(vol, ":")
+		if len(parts) >= 2 {
+			// Check if it's a named volume (doesn't start with / or .)
+			volumeName := parts[0]
+			if !strings.HasPrefix(volumeName, "/") && !strings.HasPrefix(volumeName, ".") {
+				// Create named volume if it doesn't exist
+				_, err := d.client.VolumeCreate(ctx, volume.CreateOptions{
+					Name: volumeName,
+				})
+				if err != nil {
+					// Volume might already exist, which is fine
+					// Continue with the binding
+				}
+			}
+			binds = append(binds, vol)
+		}
+	}
 
 	// Create container config
 	config := &container.Config{
@@ -343,9 +363,26 @@ func (d *DockerRuntime) DeployFromCompose(ctx context.Context, composeContent st
 		return fmt.Errorf("failed to write compose file: %w", err)
 	}
 
-	// Note: This is a simplified implementation
-	// In production, you'd want to use docker-compose or docker compose CLI
-	return fmt.Errorf("Docker Compose deployment requires docker-compose CLI")
+	// Try docker compose (v2) first, then fall back to docker-compose (v1)
+	var cmd *exec.Cmd
+	if _, err := exec.LookPath("docker"); err == nil {
+		// Try docker compose (v2)
+		cmd = exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "up", "-d")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			// Try docker-compose (v1) as fallback
+			if _, err := exec.LookPath("docker-compose"); err == nil {
+				cmd = exec.CommandContext(ctx, "docker-compose", "-f", composePath, "up", "-d")
+				if output, err := cmd.CombinedOutput(); err != nil {
+					return fmt.Errorf("failed to deploy with docker-compose: %w, output: %s", err, string(output))
+				}
+				return nil
+			}
+			return fmt.Errorf("failed to deploy with docker compose: %w, output: %s", err, string(output))
+		}
+		return nil
+	}
+
+	return fmt.Errorf("docker CLI not found in PATH")
 }
 
 // PullImage pulls the latest version of a Docker image

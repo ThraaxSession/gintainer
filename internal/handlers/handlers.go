@@ -432,8 +432,11 @@ func (h *Handler) RunContainer(c *gin.Context) {
 
 // DeployCompose handles POST /api/compose
 func (h *Handler) DeployCompose(c *gin.Context) {
+	log.Printf("[INFO] DeployCompose: Received compose deployment request from %s", c.ClientIP())
+
 	var req models.ComposeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[ERROR] DeployCompose: Invalid request body: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -442,17 +445,22 @@ func (h *Handler) DeployCompose(c *gin.Context) {
 		req.Runtime = "docker"
 	}
 
+	log.Printf("[INFO] DeployCompose: Deploying compose with runtime %s", req.Runtime)
+
 	rt, ok := h.runtimeManager.GetRuntime(req.Runtime)
 	if !ok {
+		log.Printf("[ERROR] DeployCompose: Invalid runtime: %s", req.Runtime)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 		return
 	}
 
 	if err := rt.DeployFromCompose(c.Request.Context(), req.ComposeContent); err != nil {
+		log.Printf("[ERROR] DeployCompose: Failed to deploy compose: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[INFO] DeployCompose: Successfully deployed compose")
 	c.JSON(http.StatusOK, gin.H{"message": "compose deployed successfully"})
 }
 
