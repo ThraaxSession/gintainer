@@ -169,10 +169,6 @@ func (m *Manager) GetConfig() *Config {
 
 // UpdateConfig updates the configuration and saves to file
 func (m *Manager) UpdateConfig(config *Config) error {
-	m.mu.Lock()
-	m.config = config
-	m.mu.Unlock()
-
 	fmt.Printf("[INFO] UpdateConfig: Marshaling config to YAML\n")
 	// Marshal to YAML
 	data, err := yaml.Marshal(config)
@@ -186,10 +182,16 @@ func (m *Manager) UpdateConfig(config *Config) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	fmt.Printf("[INFO] UpdateConfig: Config file saved successfully\n")
+	fmt.Printf("[INFO] UpdateConfig: Config file saved successfully, reloading from file\n")
+	// Reload from file to ensure persistence
+	if err := m.loadConfig(); err != nil {
+		return fmt.Errorf("failed to reload config after save: %w", err)
+	}
+
+	fmt.Printf("[INFO] UpdateConfig: Config reloaded successfully from file\n")
 	// Trigger onChange callback if set
 	if m.onChange != nil {
-		m.onChange(config)
+		m.onChange(m.GetConfig())
 	}
 
 	return nil

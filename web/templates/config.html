@@ -208,8 +208,8 @@ document.getElementById('configForm').addEventListener('submit', function(e) {
     })
     .then(() => {
         showToast('Configuration saved successfully!', 'success');
-        // Reload after a short delay to ensure file is written
-        setTimeout(() => load(), 500);
+        // Reload immediately - backend has already reloaded from file
+        load();
     })
     .catch(err => showToast('Error saving configuration: ' + err.message, 'error'));
 });
