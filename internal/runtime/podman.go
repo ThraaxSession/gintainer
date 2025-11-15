@@ -8,10 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/ThraaxSession/gintainer/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 // PodmanRuntime implements ContainerRuntime for Podman
@@ -354,6 +356,28 @@ func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent st
 	}
 	defer os.RemoveAll(tempDir)
 
+	// Parse compose file to extract service names for meaningful pod name
+	projectName := ""
+	var compose struct {
+		Services map[string]interface{} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal([]byte(composeContent), &compose); err == nil && len(compose.Services) > 0 {
+		// Extract and sort service names
+		serviceNames := make([]string, 0, len(compose.Services))
+		for name := range compose.Services {
+			serviceNames = append(serviceNames, name)
+		}
+		sort.Strings(serviceNames)
+
+		// Create project name from service names (limit to first 5 services to avoid too long names)
+		maxServices := 5
+		if len(serviceNames) > maxServices {
+			serviceNames = serviceNames[:maxServices]
+		}
+		// Use service names as project name which will be used by podman-compose for pod naming
+		projectName = strings.Join(serviceNames, "_")
+	}
+
 	// Write compose file
 	composePath := filepath.Join(tempDir, "docker-compose.yml")
 	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
@@ -362,7 +386,14 @@ func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent st
 
 	// Use podman-compose if available
 	if _, err := exec.LookPath("podman-compose"); err == nil {
-		cmd := exec.CommandContext(ctx, "podman-compose", "-f", composePath, "up", "-d")
+		args := []string{"-f", composePath}
+		// Add project name if we extracted service names
+		if projectName != "" {
+			args = append(args, "-p", projectName)
+		}
+		args = append(args, "up", "-d")
+
+		cmd := exec.CommandContext(ctx, "podman-compose", args...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to deploy with podman-compose: %w, output: %s", err, string(output))
 		}
