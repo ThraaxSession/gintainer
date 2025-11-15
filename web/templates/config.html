@@ -5,12 +5,30 @@
     <title>{{ .title }} - Configuration</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <style>.sidebar { min-height: 100vh; background-color: var(--bs-light); } [data-bs-theme="dark"] .sidebar { background-color: var(--bs-dark); } .nav-link.active { background-color: var(--bs-primary); color: white !important; }</style>
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        [data-bs-theme="light"] body { background: #f0f2f5; }
+        [data-bs-theme="dark"] body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+        .sidebar { min-height: 100vh; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); position: fixed; top: 0; left: 0; }
+        [data-bs-theme="dark"] .sidebar { background: rgba(30,30,40,0.95); }
+        .nav-link { transition: all 0.3s; border-radius: 8px; margin: 4px 8px; }
+        .nav-link:hover { background: rgba(102,126,234,0.1); transform: translateX(5px); }
+        .nav-link.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+        .card { border: none; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); background: white; }
+        [data-bs-theme="dark"] .card { background: rgba(30,30,40,0.95); }
+        main { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 20px; margin: 20px; padding: 20px; }
+        [data-bs-theme="light"] main { background: white; }
+        [data-bs-theme="dark"] main { background: rgba(30,30,40,0.95); }
+        .toast-container { z-index: 9999; }
+        .btn-gradient { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; transition: all 0.3s; }
+        .btn-gradient:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102,126,234,0.4); color: white; }
+    </style>
 </head>
 <body>
+    <div class="toast-container position-fixed top-0 end-0 p-3"></div>
     <div class="container-fluid"><div class="row">
         <nav class="col-md-2 d-md-block sidebar collapse"><div class="position-sticky pt-3">
-            <h5 class="px-3 mb-3">{{ .title }}</h5><ul class="nav flex-column">
+            <h5 class="px-3 mb-3" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">{{ .title }}</h5><ul class="nav flex-column">
                 <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
                 <li class="nav-item"><a class="nav-link" href="/containers"><i class="bi bi-box-seam"></i> Containers</a></li>
                 <li class="nav-item"><a class="nav-link" href="/pods"><i class="bi bi-boxes"></i> Pods</a></li>
@@ -19,20 +37,183 @@
             </ul>
         </div></nav>
         <main class="col-md-10 ms-sm-auto px-md-4">
-            <div class="d-flex justify-content-between pt-3 pb-2 mb-3 border-bottom"><h1 class="h2">Configuration</h1></div>
+            <div class="d-flex justify-content-between pt-3 pb-2 mb-3"><h1 class="h2" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">Configuration</h1></div>
             <div class="alert alert-info"><i class="bi bi-info-circle"></i> Changes saved here will apply immediately (hot-reload).</div>
-            <div class="card"><div class="card-header"><h5 class="card-title mb-0">Application Configuration</h5></div><div class="card-body"><form id="configForm">
-                <h6 class="border-bottom pb-2 mb-3">Server</h6><div class="row"><div class="col-md-6 mb-3"><label class="form-label">Port</label><input type="text" class="form-control" id="port" placeholder="8080"></div><div class="col-md-6 mb-3"><label class="form-label">Mode</label><select class="form-select" id="mode"><option value="debug">Debug</option><option value="release">Release</option></select></div></div>
+            <div class="card"><div class="card-header bg-transparent border-0 pt-3"><h5 class="card-title mb-0">Application Configuration</h5></div><div class="card-body"><form id="configForm">
+                <h6 class="border-bottom pb-2 mb-3">Server</h6><div class="row"><div class="col-md-6 mb-3"><label class="form-label">Port <span class="text-danger">*</span></label><input type="text" class="form-control" id="port" placeholder="8080" required pattern="[0-9]+"></div><div class="col-md-6 mb-3"><label class="form-label">Mode <span class="text-danger">*</span></label><select class="form-select" id="mode" required><option value="debug">Debug</option><option value="release">Release</option></select></div></div>
                 <h6 class="border-bottom pb-2 mb-3 mt-4">Runtime</h6><div class="row"><div class="col-md-6 mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="docker"><label class="form-check-label" for="docker">Enable Docker</label></div></div><div class="col-md-6 mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="podman"><label class="form-check-label" for="podman">Enable Podman</label></div></div></div>
-                <h6 class="border-bottom pb-2 mb-3 mt-4">UI</h6><div class="row"><div class="col-md-6 mb-3"><label class="form-label">Title</label><input type="text" class="form-control" id="title" placeholder="Gintainer"></div><div class="col-md-6 mb-3"><label class="form-label">Theme</label><select class="form-select" id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></div></div>
-                <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save</button> <button type="button" class="btn btn-secondary" onclick="load()"><i class="bi bi-arrow-clockwise"></i> Reload</button>
+                <h6 class="border-bottom pb-2 mb-3 mt-4">UI</h6><div class="row"><div class="col-md-6 mb-3"><label class="form-label">Title <span class="text-danger">*</span></label><input type="text" class="form-control" id="title" placeholder="Gintainer" required minlength="1"></div><div class="col-md-6 mb-3"><label class="form-label">Theme <span class="text-danger">*</span></label><select class="form-select" id="theme" required><option value="light">Light</option><option value="dark">Dark</option></select></div></div>
+                <h6 class="border-bottom pb-2 mb-3 mt-4">Deployment</h6><div class="row"><div class="col-md-12 mb-3"><label class="form-label">Base Path</label><input type="text" class="form-control" id="deploymentBasePath" placeholder="./deployments"><small class="form-text text-muted">Directory where compose deployments will be stored (defaults to ./deployments if empty)</small></div></div>
+                <div id="caddySection"></div>
+                <button type="submit" class="btn btn-gradient"><i class="bi bi-save"></i> Save</button> <button type="button" class="btn btn-secondary" onclick="load()"><i class="bi bi-arrow-clockwise"></i> Reload</button>
             </form></div></div>
         </main>
     </div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-function load() { fetch('/api/config').then(r=>r.json()).then(c=>{ document.getElementById('port').value=c.server?.port||'8080'; document.getElementById('mode').value=c.server?.mode||'debug'; document.getElementById('docker').checked=c.docker?.enabled!==false; document.getElementById('podman').checked=c.podman?.enabled!==false; document.getElementById('title').value=c.ui?.title||'Gintainer'; document.getElementById('theme').value=c.ui?.theme||'light'; }); }
-document.getElementById('configForm').addEventListener('submit', function(e) { e.preventDefault(); const cfg={server:{port:document.getElementById('port').value,mode:document.getElementById('mode').value},docker:{enabled:document.getElementById('docker').checked},podman:{enabled:document.getElementById('podman').checked},ui:{title:document.getElementById('title').value,description:'',theme:document.getElementById('theme').value},scheduler:{enabled:false,schedule:'0 2 * * *',filters:[]}}; fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg)}).then(()=>{ alert('Saved! Restart to apply.'); load(); }); });
+let currentConfig = {};
+function showToast(message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    const toastId = 'toast-' + Date.now();
+    const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+    const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+    const toast = `<div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert"><div class="d-flex"><div class="toast-body"><i class="bi bi-${icon}"></i> ${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
+    toastContainer.insertAdjacentHTML('beforeend', toast);
+    const toastEl = new bootstrap.Toast(document.getElementById(toastId), { delay: 3000 });
+    toastEl.show();
+    setTimeout(() => document.getElementById(toastId)?.remove(), 4000);
+}
+
+function renderCaddyConfig(config) {
+    const caddySection = document.getElementById('caddySection');
+    
+    // Always render Caddy section, using defaults if not present
+    const caddy = config.caddy || {
+        enabled: false,
+        caddyfile_path: '',
+        caddy_binary_path: 'caddy',
+        use_sudo: false,
+        auto_reload: false,
+        reload_method: 'binary'
+    };
+    
+    const html = `
+        <h6 class="border-bottom pb-2 mb-3 mt-4">Caddy Integration</h6>
+        <div class="row">
+            <div class="col-md-12 mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="caddyEnabled" ${caddy.enabled ? 'checked' : ''}>
+                    <label class="form-check-label" for="caddyEnabled">Enable Caddy Integration</label>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Caddyfile Path</label>
+                <input type="text" class="form-control" id="caddyfilePath" value="${caddy.caddyfile_path || ''}" placeholder="/etc/caddy/conf.d">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Caddy Binary Path</label>
+                <input type="text" class="form-control" id="caddyBinaryPath" value="${caddy.caddy_binary_path || 'caddy'}" placeholder="caddy">
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="caddyUseSudo" ${caddy.use_sudo ? 'checked' : ''}>
+                    <label class="form-check-label" for="caddyUseSudo">Use Sudo for Caddy Commands</label>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="caddyAutoReload" ${caddy.auto_reload ? 'checked' : ''}>
+                    <label class="form-check-label" for="caddyAutoReload">Auto Reload on Changes</label>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Reload Method</label>
+                <select class="form-select" id="caddyReloadMethod">
+                    <option value="binary" ${caddy.reload_method === 'binary' ? 'selected' : ''}>Binary</option>
+                    <option value="systemctl" ${caddy.reload_method === 'systemctl' ? 'selected' : ''}>Systemctl</option>
+                </select>
+            </div>
+        </div>
+    `;
+    caddySection.innerHTML = html;
+}
+
+function load() {
+    showToast('Loading configuration...', 'info');
+    fetch('/api/config')
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to load configuration');
+            return r.json();
+        })
+        .then(c => {
+            currentConfig = c;
+            document.getElementById('port').value = c.server?.port || '8080';
+            document.getElementById('mode').value = c.server?.mode || 'debug';
+            document.getElementById('docker').checked = c.docker?.enabled !== false;
+            document.getElementById('podman').checked = c.podman?.enabled !== false;
+            document.getElementById('title').value = c.ui?.title || 'Gintainer';
+            document.getElementById('theme').value = c.ui?.theme || 'light';
+            document.getElementById('deploymentBasePath').value = c.deployment?.base_path || './deployments';
+            renderCaddyConfig(c);
+            showToast('Configuration loaded successfully', 'success');
+        })
+        .catch(err => showToast('Error loading configuration: ' + err.message, 'error'));
+}
+
+document.getElementById('configForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    if (!this.checkValidity()) {
+        e.stopPropagation();
+        this.classList.add('was-validated');
+        showToast('Please fill in all required fields correctly', 'error');
+        return;
+    }
+    
+    const cfg = {
+        server: {
+            port: document.getElementById('port').value,
+            mode: document.getElementById('mode').value
+        },
+        docker: {
+            enabled: document.getElementById('docker').checked
+        },
+        podman: {
+            enabled: document.getElementById('podman').checked
+        },
+        ui: {
+            title: document.getElementById('title').value,
+            description: currentConfig.ui?.description || '',
+            theme: document.getElementById('theme').value
+        },
+        deployment: {
+            base_path: document.getElementById('deploymentBasePath').value
+        },
+        scheduler: currentConfig.scheduler || {
+            enabled: false,
+            schedule: '0 2 * * *',
+            filters: []
+        },
+        caddy: currentConfig.caddy || {
+            enabled: false,
+            caddyfile_path: '',
+            caddy_binary_path: 'caddy',
+            use_sudo: false,
+            auto_reload: false,
+            reload_method: 'binary'
+        }
+    };
+    
+    const caddyEnabledEl = document.getElementById('caddyEnabled');
+    if (caddyEnabledEl) {
+        cfg.caddy = {
+            enabled: caddyEnabledEl.checked,
+            caddyfile_path: document.getElementById('caddyfilePath').value,
+            caddy_binary_path: document.getElementById('caddyBinaryPath').value,
+            use_sudo: document.getElementById('caddyUseSudo').checked,
+            auto_reload: document.getElementById('caddyAutoReload').checked,
+            reload_method: document.getElementById('caddyReloadMethod').value
+        };
+    }
+    
+    showToast('Saving configuration...', 'info');
+    fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg)
+    })
+    .then(r => {
+        if (!r.ok) throw new Error('Failed to save configuration');
+        return r.json();
+    })
+    .then(() => {
+        showToast('Configuration saved successfully!', 'success');
+        // Reload immediately - backend has already reloaded from file
+        load();
+    })
+    .catch(err => showToast('Error saving configuration: ' + err.message, 'error'));
+});
+
 load();
     </script>
 </body>

@@ -4,15 +4,31 @@ import "time"
 
 // ContainerInfo represents container information across different runtimes
 type ContainerInfo struct {
-	ID      string            `json:"id"`
-	Name    string            `json:"name"`
-	Image   string            `json:"image"`
-	Status  string            `json:"status"`
-	State   string            `json:"state"`
-	Runtime string            `json:"runtime"` // "docker" or "podman"
-	Created time.Time         `json:"created"`
-	Labels  map[string]string `json:"labels,omitempty"`
-	Ports   []PortMapping     `json:"ports,omitempty"`
+	ID             string            `json:"id"`
+	Name           string            `json:"name"`
+	Image          string            `json:"image"`
+	Status         string            `json:"status"`
+	State          string            `json:"state"`
+	Runtime        string            `json:"runtime"` // "docker" or "podman"
+	Created        time.Time         `json:"created"`
+	Labels         map[string]string `json:"labels,omitempty"`
+	Ports          []PortMapping     `json:"ports,omitempty"`
+	Stats          *ContainerStats   `json:"stats,omitempty"`
+	Privileged     bool              `json:"privileged,omitempty"`      // Whether container runs with elevated privileges
+	DeploymentPath string            `json:"deployment_path,omitempty"` // Path where compose file is stored (if deployed from compose)
+}
+
+// ContainerStats represents real-time container statistics
+type ContainerStats struct {
+	CPUPercent    float64 `json:"cpu_percent"`
+	MemoryUsage   uint64  `json:"memory_usage"` // in bytes
+	MemoryLimit   uint64  `json:"memory_limit"` // in bytes
+	MemoryPercent float64 `json:"memory_percent"`
+	NetworkRx     uint64  `json:"network_rx"`  // bytes received
+	NetworkTx     uint64  `json:"network_tx"`  // bytes transmitted
+	BlockRead     uint64  `json:"block_read"`  // bytes read from disk
+	BlockWrite    uint64  `json:"block_write"` // bytes written to disk
+	PIDs          uint64  `json:"pids"`        // number of processes
 }
 
 // PortMapping represents a container port mapping
@@ -24,19 +40,22 @@ type PortMapping struct {
 
 // PodInfo represents pod information (Podman-specific)
 type PodInfo struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Status     string    `json:"status"`
-	Created    time.Time `json:"created"`
-	Containers []string  `json:"containers,omitempty"`
-	Runtime    string    `json:"runtime"` // Always "podman"
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Status         string    `json:"status"`
+	Created        time.Time `json:"created"`
+	Containers     []string  `json:"containers,omitempty"`
+	Runtime        string    `json:"runtime"`                   // Always "podman"
+	DeploymentPath string    `json:"deployment_path,omitempty"` // Path where compose file is stored (if deployed from compose)
 }
 
 // FilterOptions represents filtering criteria
 type FilterOptions struct {
-	Name    string `form:"name" json:"name"`
-	Status  string `form:"status" json:"status"`
-	Runtime string `form:"runtime" json:"runtime"` // "docker", "podman", or "all"
+	Name              string `form:"name" json:"name"`
+	Status            string `form:"status" json:"status"`
+	Runtime           string `form:"runtime" json:"runtime"`                       // "docker", "podman", or "all"
+	IncludeStats      bool   `form:"include_stats" json:"include_stats"`           // Whether to include real-time stats
+	IncludePrivileged bool   `form:"include_privileged" json:"include_privileged"` // Include containers with elevated privileges (sudo)
 }
 
 // CreateContainerRequest represents a request to create a container
@@ -47,10 +66,22 @@ type CreateContainerRequest struct {
 	Runtime    string `json:"runtime"`    // "docker" or "podman"
 }
 
+// RunContainerRequest represents a request to create and run a container from an image
+type RunContainerRequest struct {
+	Name          string   `json:"name"`           // Container name
+	Image         string   `json:"image"`          // Image name
+	Runtime       string   `json:"runtime"`        // "docker" or "podman"
+	RestartPolicy string   `json:"restart_policy"` // "always", "unless-stopped", "on-failure", or ""
+	Ports         []string `json:"ports"`          // Port mappings in "host:container" format
+	Volumes       []string `json:"volumes"`        // Volume mappings in "host:container" format
+	EnvVars       []string `json:"env_vars"`       // Environment variables in "KEY=VALUE" format
+}
+
 // ComposeRequest represents a request to deploy from a compose file
 type ComposeRequest struct {
 	ComposeContent string `json:"compose_content"` // Docker/Podman compose file content
 	Runtime        string `json:"runtime"`         // "docker" or "podman"
+	ProjectName    string `json:"project_name"`    // Optional project name for the deployment
 }
 
 // UpdateRequest represents a request to update containers

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -11,13 +12,14 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Scheduler SchedulerConfig `yaml:"scheduler"`
-	Docker    RuntimeConfig   `yaml:"docker"`
-	Podman    RuntimeConfig   `yaml:"podman"`
-	Caddy     CaddyConfig     `yaml:"caddy"`
-	UI        UIConfig        `yaml:"ui"`
-	mu        sync.RWMutex
+	Server     ServerConfig     `yaml:"server"`
+	Scheduler  SchedulerConfig  `yaml:"scheduler"`
+	Docker     RuntimeConfig    `yaml:"docker"`
+	Podman     RuntimeConfig    `yaml:"podman"`
+	Caddy      CaddyConfig      `yaml:"caddy"`
+	UI         UIConfig         `yaml:"ui"`
+	Deployment DeploymentConfig `yaml:"deployment"`
+	mu         sync.RWMutex
 }
 
 // ServerConfig represents server configuration
@@ -54,6 +56,11 @@ type UIConfig struct {
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
 	Theme       string `yaml:"theme"` // "light" or "dark"
+}
+
+// DeploymentConfig represents deployment configuration
+type DeploymentConfig struct {
+	BasePath string `yaml:"base_path"` // Base path for storing compose deployments
 }
 
 // Manager manages configuration loading and hot-reload
@@ -127,6 +134,9 @@ func DefaultConfig() *Config {
 			Description: "Container & Pod Management",
 			Theme:       "light",
 		},
+		Deployment: DeploymentConfig{
+			BasePath: "./deployments",
+		},
 	}
 }
 
@@ -160,25 +170,52 @@ func (m *Manager) GetConfig() *Config {
 
 // UpdateConfig updates the configuration and saves to file
 func (m *Manager) UpdateConfig(config *Config) error {
-	m.mu.Lock()
-	m.config = config
-	m.mu.Unlock()
-
+	log.Printf("[INFO] UpdateConfig: Marshaling config to YAML\n")
 	// Marshal to YAML
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
+	log.Printf("[INFO] UpdateConfig: Writing config to file: %s\n", m.filePath)
 	// Write to file
 	if err := os.WriteFile(m.filePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Trigger onChange callback if set
-	if m.onChange != nil {
-		m.onChange(config)
+	// Acquire write lock for reloading
+	m.mu.Lock()
+	// Save old config in case reload fails
+	oldConfig := m.config
+
+	log.Printf("[INFO] UpdateConfig: Config file saved successfully, reloading from file\n")
+	// Read from file
+	reloadData, err := os.ReadFile(m.filePath)
+	if err != nil {
+		// Restore old config and release lock
+		m.mu.Unlock()
+		return fmt.Errorf("failed to read config after save: %w", err)
 	}
+
+	var reloadedConfig Config
+	if err := yaml.Unmarshal(reloadData, &reloadedConfig); err != nil {
+		// Restore old config and release lock
+		m.mu.Unlock()
+		return fmt.Errorf("failed to unmarshal config after save: %w", err)
+	}
+
+	// Update in-memory config
+	m.config = &reloadedConfig
+	m.mu.Unlock()
+
+	log.Printf("[INFO] UpdateConfig: Config reloaded successfully from file\n")
+	// Trigger onChange callback if set (outside of lock to avoid deadlocks)
+	if m.onChange != nil {
+		m.onChange(m.GetConfig())
+	}
+
+	// Suppress unused variable warning
+	_ = oldConfig
 
 	return nil
 }
