@@ -272,6 +272,17 @@ function viewLogs(id, name, rt) {
         });
 }
 
+// Reset counters when modals are opened
+document.addEventListener('DOMContentLoaded', function() {
+    const createModal = document.getElementById('createModal');
+    if (createModal) {
+        createModal.addEventListener('show.bs.modal', function() {
+            portCounter = 1;
+            volumeCounter = 1;
+        });
+    }
+});
+
 loadContainers(); setInterval(loadContainers, 5000);
     </script>
 </body>

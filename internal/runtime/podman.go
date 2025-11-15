@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,9 +59,9 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		Created int64             `json:"Created"`
 		Labels  map[string]string `json:"Labels"`
 		Ports   []struct {
-			HostPort      int    `json:"host_port"`
-			ContainerPort int    `json:"container_port"`
-			Protocol      string `json:"protocol"`
+			HostPort      json.Number `json:"host_port"`
+			ContainerPort json.Number `json:"container_port"`
+			Protocol      string      `json:"protocol"`
 		} `json:"Ports"`
 	}
 
@@ -79,9 +81,11 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 
 		ports := make([]models.PortMapping, 0, len(pc.Ports))
 		for _, p := range pc.Ports {
+			hostPort, _ := p.HostPort.Int64()
+			containerPort, _ := p.ContainerPort.Int64()
 			ports = append(ports, models.PortMapping{
-				ContainerPort: p.ContainerPort,
-				HostPort:      p.HostPort,
+				ContainerPort: int(containerPort),
+				HostPort:      int(hostPort),
 				Protocol:      p.Protocol,
 			})
 		}
@@ -115,8 +119,40 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 			// Get stats for running containers
 			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containers[i].ID)
 			if statsOut, err := statsCmd.Output(); err == nil && len(statsOut) > 0 {
-				// Parse podman stats output and populate containers[i].Stats
-				// This is a placeholder - proper JSON parsing needed
+				var podmanStats []struct {
+					ID            string `json:"ID"`
+					Name          string `json:"Name"`
+					CPUPercentage string `json:"CPU"`
+					MemUsage      string `json:"MemUsage"`
+					MemPercentage string `json:"MemPerc"`
+					NetIO         string `json:"NetIO"`
+					BlockIO       string `json:"BlockIO"`
+					PIDs          string `json:"PIDs"`
+				}
+				if err := json.Unmarshal(statsOut, &podmanStats); err == nil && len(podmanStats) > 0 {
+					// Parse CPU percentage (format: "0.50%")
+					cpuStr := strings.TrimSuffix(podmanStats[0].CPUPercentage, "%")
+					cpuPerc, _ := strconv.ParseFloat(cpuStr, 64)
+
+					// Parse memory usage (format: "100MB / 8GB")
+					memParts := strings.Split(podmanStats[0].MemUsage, " / ")
+					var memUsage, memLimit uint64
+					if len(memParts) == 2 {
+						memUsage = parseSize(strings.TrimSpace(memParts[0]))
+						memLimit = parseSize(strings.TrimSpace(memParts[1]))
+					}
+
+					// Parse memory percentage (format: "1.25%")
+					memPercStr := strings.TrimSuffix(podmanStats[0].MemPercentage, "%")
+					memPerc, _ := strconv.ParseFloat(memPercStr, 64)
+
+					containers[i].Stats = &models.ContainerStats{
+						CPUPercent:    cpuPerc,
+						MemoryUsage:   memUsage,
+						MemoryLimit:   memLimit,
+						MemoryPercent: memPerc,
+					}
+				}
 			}
 		}
 	}
@@ -321,7 +357,11 @@ func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContaine
 			if !strings.HasPrefix(volumeName, "/") && !strings.HasPrefix(volumeName, ".") {
 				// Create named volume if it doesn't exist
 				createCmd := exec.CommandContext(ctx, "podman", "volume", "create", volumeName)
-				_ = createCmd.Run() // Ignore error if volume already exists
+				output, err := createCmd.CombinedOutput()
+				if err != nil && !strings.Contains(string(output), "already exists") {
+					log.Printf("[WARN] RunContainer: Failed to create volume %q: %v: %s", volumeName, err, string(output))
+					// Continue anyway - container creation will fail if volume is truly needed
+				}
 			}
 		}
 		args = append(args, "-v", volMap)
@@ -516,4 +556,33 @@ func (c *cmdReadCloser) Close() error {
 // GetRuntimeName returns "podman"
 func (p *PodmanRuntime) GetRuntimeName() string {
 	return "podman"
+}
+
+// parseSize parses a size string like "100MB" or "8GB" to bytes
+func parseSize(sizeStr string) uint64 {
+	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
+	var multiplier uint64 = 1
+
+	if strings.HasSuffix(sizeStr, "KB") {
+		multiplier = 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "KB")
+	} else if strings.HasSuffix(sizeStr, "MB") {
+		multiplier = 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "MB")
+	} else if strings.HasSuffix(sizeStr, "GB") {
+		multiplier = 1024 * 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "GB")
+	} else if strings.HasSuffix(sizeStr, "TB") {
+		multiplier = 1024 * 1024 * 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "TB")
+	} else if strings.HasSuffix(sizeStr, "B") {
+		sizeStr = strings.TrimSuffix(sizeStr, "B")
+	}
+
+	val, err := strconv.ParseFloat(sizeStr, 64)
+	if err != nil {
+		return 0
+	}
+
+	return uint64(val * float64(multiplier))
 }

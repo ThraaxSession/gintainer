@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -309,9 +310,9 @@ func (d *DockerRuntime) RunContainer(ctx context.Context, req models.RunContaine
 				_, err := d.client.VolumeCreate(ctx, volume.CreateOptions{
 					Name: volumeName,
 				})
-				if err != nil {
-					// Volume might already exist, which is fine
-					// Continue with the binding
+				if err != nil && !strings.Contains(err.Error(), "already exists") {
+					log.Printf("[WARN] RunContainer: Failed to create volume %q: %v", volumeName, err)
+					// Continue anyway - container creation will fail if volume is truly needed
 				}
 			}
 			binds = append(binds, vol)

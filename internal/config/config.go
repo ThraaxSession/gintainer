@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -169,26 +170,26 @@ func (m *Manager) GetConfig() *Config {
 
 // UpdateConfig updates the configuration and saves to file
 func (m *Manager) UpdateConfig(config *Config) error {
-	fmt.Printf("[INFO] UpdateConfig: Marshaling config to YAML\n")
+	log.Printf("[INFO] UpdateConfig: Marshaling config to YAML\n")
 	// Marshal to YAML
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	fmt.Printf("[INFO] UpdateConfig: Writing config to file: %s\n", m.filePath)
+	log.Printf("[INFO] UpdateConfig: Writing config to file: %s\n", m.filePath)
 	// Write to file
 	if err := os.WriteFile(m.filePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	fmt.Printf("[INFO] UpdateConfig: Config file saved successfully, reloading from file\n")
+	log.Printf("[INFO] UpdateConfig: Config file saved successfully, reloading from file\n")
 	// Reload from file to ensure persistence
 	if err := m.loadConfig(); err != nil {
 		return fmt.Errorf("failed to reload config after save: %w", err)
 	}
 
-	fmt.Printf("[INFO] UpdateConfig: Config reloaded successfully from file\n")
+	log.Printf("[INFO] UpdateConfig: Config reloaded successfully from file\n")
 	// Trigger onChange callback if set
 	if m.onChange != nil {
 		m.onChange(m.GetConfig())
