@@ -141,11 +141,15 @@ func (p *PodmanRuntime) ListPods(ctx context.Context, filterOpts models.FilterOp
 
 	// Parse JSON output from podman
 	var podmanPods []struct {
-		ID         string   `json:"Id"`
-		Name       string   `json:"Name"`
-		Status     string   `json:"Status"`
-		Created    int64    `json:"Created"`
-		Containers []string `json:"Containers"`
+		ID         string `json:"Id"`
+		Name       string `json:"Name"`
+		Status     string `json:"Status"`
+		Created    string `json:"Created"`
+		Containers []struct {
+			ID     string `json:"Id"`
+			Names  string `json:"Names"`
+			Status string `json:"Status"`
+		} `json:"Containers"`
 	}
 
 	if len(output) > 0 {
@@ -157,12 +161,26 @@ func (p *PodmanRuntime) ListPods(ctx context.Context, filterOpts models.FilterOp
 	// Convert to PodInfo format
 	pods := make([]models.PodInfo, 0, len(podmanPods))
 	for _, pp := range podmanPods {
+		// Extract container IDs from the Containers array
+		containerIDs := make([]string, 0, len(pp.Containers))
+		for _, c := range pp.Containers {
+			containerIDs = append(containerIDs, c.ID)
+		}
+
+		// Parse Created timestamp
+		created := time.Now()
+		if pp.Created != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, pp.Created); err == nil {
+				created = parsedTime
+			}
+		}
+
 		pods = append(pods, models.PodInfo{
 			ID:         pp.ID,
 			Name:       pp.Name,
 			Status:     pp.Status,
-			Created:    time.Unix(pp.Created, 0),
-			Containers: pp.Containers,
+			Created:    created,
+			Containers: containerIDs,
 			Runtime:    "podman",
 		})
 	}
