@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        [data-bs-theme="light"] body { background: #f0f2f5; }
         [data-bs-theme="dark"] body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
         .sidebar { min-height: 100vh; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); position: fixed; top: 0; left: 0; }
         [data-bs-theme="dark"] .sidebar { background: rgba(30,30,40,0.95); }
@@ -16,6 +17,7 @@
         .card { border: none; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); background: white; }
         [data-bs-theme="dark"] .card { background: rgba(30,30,40,0.95); }
         main { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 20px; margin: 20px; padding: 20px; }
+        [data-bs-theme="light"] main { background: white; }
         [data-bs-theme="dark"] main { background: rgba(30,30,40,0.95); }
         .toast-container { z-index: 9999; }
         .btn-gradient { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; transition: all 0.3s; }
@@ -63,42 +65,51 @@ function showToast(message, type = 'info') {
 
 function renderCaddyConfig(config) {
     const caddySection = document.getElementById('caddySection');
-    if (!config.caddy) return;
+    
+    // Always render Caddy section, using defaults if not present
+    const caddy = config.caddy || {
+        enabled: false,
+        caddyfile_path: '',
+        caddy_binary_path: 'caddy',
+        use_sudo: false,
+        auto_reload: false,
+        reload_method: 'binary'
+    };
     
     const html = `
         <h6 class="border-bottom pb-2 mb-3 mt-4">Caddy Integration</h6>
         <div class="row">
             <div class="col-md-12 mb-3">
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="caddyEnabled" ${config.caddy.enabled ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="caddyEnabled" ${caddy.enabled ? 'checked' : ''}>
                     <label class="form-check-label" for="caddyEnabled">Enable Caddy Integration</label>
                 </div>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Caddyfile Path</label>
-                <input type="text" class="form-control" id="caddyfilePath" value="${config.caddy.caddyfile_path || ''}" placeholder="/etc/caddy/conf.d">
+                <input type="text" class="form-control" id="caddyfilePath" value="${caddy.caddyfile_path || ''}" placeholder="/etc/caddy/conf.d">
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Caddy Binary Path</label>
-                <input type="text" class="form-control" id="caddyBinaryPath" value="${config.caddy.caddy_binary_path || 'caddy'}" placeholder="caddy">
+                <input type="text" class="form-control" id="caddyBinaryPath" value="${caddy.caddy_binary_path || 'caddy'}" placeholder="caddy">
             </div>
             <div class="col-md-6 mb-3">
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="caddyUseSudo" ${config.caddy.use_sudo ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="caddyUseSudo" ${caddy.use_sudo ? 'checked' : ''}>
                     <label class="form-check-label" for="caddyUseSudo">Use Sudo for Caddy Commands</label>
                 </div>
             </div>
             <div class="col-md-6 mb-3">
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="caddyAutoReload" ${config.caddy.auto_reload ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="caddyAutoReload" ${caddy.auto_reload ? 'checked' : ''}>
                     <label class="form-check-label" for="caddyAutoReload">Auto Reload on Changes</label>
                 </div>
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label">Reload Method</label>
                 <select class="form-select" id="caddyReloadMethod">
-                    <option value="binary" ${config.caddy.reload_method === 'binary' ? 'selected' : ''}>Binary</option>
-                    <option value="systemctl" ${config.caddy.reload_method === 'systemctl' ? 'selected' : ''}>Systemctl</option>
+                    <option value="binary" ${caddy.reload_method === 'binary' ? 'selected' : ''}>Binary</option>
+                    <option value="systemctl" ${caddy.reload_method === 'systemctl' ? 'selected' : ''}>Systemctl</option>
                 </select>
             </div>
         </div>
