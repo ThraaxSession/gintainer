@@ -2,10 +2,10 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
 
+	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
 )
@@ -170,14 +170,14 @@ func (m *Manager) GetConfig() *Config {
 
 // UpdateConfig updates the configuration and saves to file
 func (m *Manager) UpdateConfig(config *Config) error {
-	log.Printf("[INFO] UpdateConfig: Marshaling config to YAML\n")
+	logger.Info("UpdateConfig: Marshaling config to YAML")
 	// Marshal to YAML
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	log.Printf("[INFO] UpdateConfig: Writing config to file: %s\n", m.filePath)
+	logger.Info("UpdateConfig: Writing config to file", "path", m.filePath)
 	// Write to file
 	if err := os.WriteFile(m.filePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
@@ -188,7 +188,7 @@ func (m *Manager) UpdateConfig(config *Config) error {
 	// Save old config in case reload fails
 	oldConfig := m.config
 
-	log.Printf("[INFO] UpdateConfig: Config file saved successfully, reloading from file\n")
+	logger.Info("UpdateConfig: Config file saved successfully, reloading from file")
 	// Read from file
 	reloadData, err := os.ReadFile(m.filePath)
 	if err != nil {
@@ -208,7 +208,7 @@ func (m *Manager) UpdateConfig(config *Config) error {
 	m.config = &reloadedConfig
 	m.mu.Unlock()
 
-	log.Printf("[INFO] UpdateConfig: Config reloaded successfully from file\n")
+	logger.Info("UpdateConfig: Config reloaded successfully from file")
 	// Trigger onChange callback if set (outside of lock to avoid deadlocks)
 	if m.onChange != nil {
 		m.onChange(m.GetConfig())

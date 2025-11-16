@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/ThraaxSession/gintainer/internal/models"
 	"gopkg.in/yaml.v3"
 )
@@ -359,7 +359,7 @@ func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContaine
 				createCmd := exec.CommandContext(ctx, "podman", "volume", "create", volumeName)
 				output, err := createCmd.CombinedOutput()
 				if err != nil && !strings.Contains(string(output), "already exists") {
-					log.Printf("[WARN] RunContainer: Failed to create volume %q: %v: %s", volumeName, err, string(output))
+					logger.Warn("RunContainer: Failed to create volume", "volume", volumeName, "error", err, "output", string(output))
 					// Continue anyway - container creation will fail if volume is truly needed
 				}
 			}
