@@ -23,31 +23,30 @@ func NewSchedulerHandler(scheduler *scheduler.Scheduler) *SchedulerHandler {
 
 // GetConfig handles GET /api/scheduler/config
 func (sh *SchedulerHandler) GetConfig(c *gin.Context) {
-	logger.Printf("[INFO] GetConfig: Retrieving scheduler configuration")
+	logger.Info("GetConfig: Retrieving scheduler configuration")
 	config := sh.scheduler.GetConfig()
 	c.JSON(http.StatusOK, config)
 }
 
 // UpdateConfig handles PUT /api/scheduler/config
 func (sh *SchedulerHandler) UpdateConfig(c *gin.Context) {
-	logger.Printf("[INFO] UpdateConfig: Received scheduler configuration update request from %s", c.ClientIP())
+	logger.Info("UpdateConfig: Received scheduler configuration update request from", "client_ip", c.ClientIP())
 
 	var config models.CronJobConfig
 	if err := c.ShouldBindJSON(&config); err != nil {
-		logger.Printf("[ERROR] UpdateConfig: Invalid request body: %v", err)
+		logger.Error("UpdateConfig: Invalid request body", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	logger.Printf("[INFO] UpdateConfig: Updating scheduler - Enabled: %v, Schedule: %s, Filters: %v",
-		config.Enabled, config.Schedule, config.Filters)
+	logger.Info("UpdateConfig: Updating scheduler - Enabled: , Schedule: , Filters", "arg1", config.Enabled, "arg2", config.Schedule, "filter3", config.Filters)
 
 	if err := sh.scheduler.UpdateConfig(config); err != nil {
-		logger.Printf("[ERROR] UpdateConfig: Failed to update scheduler configuration: %v", err)
+		logger.Error("UpdateConfig: Failed to update scheduler configuration", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	logger.Printf("[INFO] UpdateConfig: Scheduler configuration updated successfully")
+	logger.Info("UpdateConfig: Scheduler configuration updated successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "scheduler config updated successfully"})
 }

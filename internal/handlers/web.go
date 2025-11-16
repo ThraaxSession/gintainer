@@ -72,31 +72,30 @@ func (w *WebHandler) ConfigPage(c *gin.Context) {
 
 // GetConfig handles GET /api/config
 func (w *WebHandler) GetConfig(c *gin.Context) {
-	logger.Printf("[INFO] GetConfig: Retrieving configuration")
+	logger.Info("GetConfig: Retrieving configuration")
 	cfg := w.configManager.GetConfig()
 	c.JSON(http.StatusOK, cfg)
 }
 
 // UpdateConfigAPI handles POST /api/config
 func (w *WebHandler) UpdateConfigAPI(c *gin.Context) {
-	logger.Printf("[INFO] UpdateConfigAPI: Received configuration update request from %s", c.ClientIP())
+	logger.Info("UpdateConfigAPI: Received configuration update request from", "client_ip", c.ClientIP())
 
 	var cfg config.Config
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		logger.Printf("[ERROR] UpdateConfigAPI: Invalid request body: %v", err)
+		logger.Error("UpdateConfigAPI: Invalid request body", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	logger.Printf("[INFO] UpdateConfigAPI: Updating configuration - Server Port: %s, Mode: %s, Docker: %v, Podman: %v, Theme: %s, BasePath: %s",
-		cfg.Server.Port, cfg.Server.Mode, cfg.Docker.Enabled, cfg.Podman.Enabled, cfg.UI.Theme, cfg.Deployment.BasePath)
+	logger.Info("UpdateConfigAPI: Updating configuration - Server Port: , Mode: , Docker: , Podman: , Theme: , BasePath", "arg1", cfg.Server.Port, "arg2", cfg.Server.Mode, "arg3", cfg.Docker.Enabled, "arg4", cfg.Podman.Enabled, "arg5", cfg.UI.Theme, "arg6", cfg.Deployment.BasePath)
 
 	if err := w.configManager.UpdateConfig(&cfg); err != nil {
-		logger.Printf("[ERROR] UpdateConfigAPI: Failed to update configuration: %v", err)
+		logger.Error("UpdateConfigAPI: Failed to update configuration", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	logger.Printf("[INFO] UpdateConfigAPI: Configuration updated and saved successfully")
+	logger.Info("UpdateConfigAPI: Configuration updated and saved successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "configuration updated successfully"})
 }

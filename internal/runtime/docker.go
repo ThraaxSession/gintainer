@@ -311,7 +311,7 @@ func (d *DockerRuntime) RunContainer(ctx context.Context, req models.RunContaine
 					Name: volumeName,
 				})
 				if err != nil && !strings.Contains(err.Error(), "already exists") {
-					logger.Printf("[WARN] RunContainer: Failed to create volume %q: %v", volumeName, err)
+					logger.Warn("RunContainer: Failed to create volume", "volume", volumeName, "error", err)
 					// Continue anyway - container creation will fail if volume is truly needed
 				}
 			}
