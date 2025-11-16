@@ -6,64 +6,75 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-var defaultLogger *log.Logger
+var (
+	infoLogger  *log.Logger
+	errorLogger *log.Logger
+)
 
 func init() {
-	defaultLogger = log.NewWithOptions(os.Stderr, log.Options{
+	// Info and debug messages go to stdout
+	infoLogger = log.NewWithOptions(os.Stdout, log.Options{
+		ReportTimestamp: true,
+		TimeFormat:      "2006/01/02 15:04:05",
+	})
+
+	// Warn, error, and fatal messages go to stderr
+	errorLogger = log.NewWithOptions(os.Stderr, log.Options{
 		ReportTimestamp: true,
 		TimeFormat:      "2006/01/02 15:04:05",
 	})
 }
 
-// GetLogger returns the default logger instance
+// GetLogger returns the info logger instance (for stdout)
 func GetLogger() *log.Logger {
-	return defaultLogger
+	return infoLogger
 }
 
-// SetLevel sets the log level for the default logger
+// SetLevel sets the log level for both loggers
 func SetLevel(level log.Level) {
-	defaultLogger.SetLevel(level)
+	infoLogger.SetLevel(level)
+	errorLogger.SetLevel(level)
 }
 
-// Debug logs a debug message
+// Debug logs a debug message to stdout
 func Debug(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.Debug(msg, keyvals...)
+	infoLogger.Debug(msg, keyvals...)
 }
 
-// Info logs an info message
+// Info logs an info message to stdout
 func Info(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.Info(msg, keyvals...)
+	infoLogger.Info(msg, keyvals...)
 }
 
-// Warn logs a warning message
+// Warn logs a warning message to stderr
 func Warn(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.Warn(msg, keyvals...)
+	errorLogger.Warn(msg, keyvals...)
 }
 
-// Error logs an error message
+// Error logs an error message to stderr
 func Error(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.Error(msg, keyvals...)
+	errorLogger.Error(msg, keyvals...)
 }
 
-// Fatal logs a fatal message and exits
+// Fatal logs a fatal message to stderr and exits
 func Fatal(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.Fatal(msg, keyvals...)
+	errorLogger.Fatal(msg, keyvals...)
 }
 
-// Printf logs a message using Printf-style formatting (for compatibility)
+// Printf logs a message using Printf-style formatting (for compatibility) to stdout
 func Printf(format string, args ...interface{}) {
-	defaultLogger.Infof(format, args...)
+	infoLogger.Infof(format, args...)
 }
 
-// Println logs a message (for compatibility)
+// Println logs a message (for compatibility) to stdout
 func Println(msg ...interface{}) {
 	if len(msg) == 0 {
 		return
 	}
-	defaultLogger.Info(msg[0])
+	infoLogger.Info(msg[0])
 }
 
-// Fatalf logs a fatal message with Printf-style formatting and exits
+// Fatalf logs a fatal message with Printf-style formatting to stderr and exits
 func Fatalf(format string, args ...interface{}) {
-	defaultLogger.Fatalf(format, args...)
+	errorLogger.Fatalf(format, args...)
 }
