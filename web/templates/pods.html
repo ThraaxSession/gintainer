@@ -7,8 +7,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        [data-bs-theme="light"] body { background: #f0f2f5; }
         [data-bs-theme="dark"] body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
-        .sidebar { min-height: 100vh; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); }
+        .sidebar { min-height: 100vh; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); position: fixed; top: 0; left: 0; }
         [data-bs-theme="dark"] .sidebar { background: rgba(30,30,40,0.95); }
         .nav-link { transition: all 0.3s; border-radius: 8px; margin: 4px 8px; }
         .nav-link:hover { background: rgba(102,126,234,0.1); transform: translateX(5px); }
@@ -16,10 +17,13 @@
         .card { border: none; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); background: white; }
         [data-bs-theme="dark"] .card { background: rgba(30,30,40,0.95); }
         main { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 20px; margin: 20px; padding: 20px; }
+        [data-bs-theme="light"] main { background: white; }
         [data-bs-theme="dark"] main { background: rgba(30,30,40,0.95); }
+        .toast-container { z-index: 9999; }
     </style>
 </head>
 <body>
+    <div class="toast-container position-fixed top-0 end-0 p-3"></div>
     <div class="container-fluid"><div class="row">
         <nav class="col-md-2 d-md-block sidebar collapse"><div class="position-sticky pt-3">
             <h5 class="px-3 mb-3" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">{{ .title }}</h5>
@@ -40,22 +44,82 @@
     </div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-function loadPods() {
-    fetch('/api/pods').then(r=>r.json()).then(data=>{
-        const p = data.pods || []; const tbody = document.getElementById('podList');
-        tbody.innerHTML = p.length===0 ? '<tr><td colspan="4" class="text-center">No pods</td></tr>' :
-            p.map(x=>`<tr><td>${x.name||'N/A'}</td><td><span class="badge bg-info">${x.status||'unknown'}</span></td><td>${new Date(x.created).toLocaleString()}</td><td>
-                <button class="btn btn-sm btn-success" onclick="startPod('${x.id}')"><i class="bi bi-play-circle"></i></button>
-                <button class="btn btn-sm btn-warning" onclick="stopPod('${x.id}')"><i class="bi bi-stop-circle"></i></button>
-                <button class="btn btn-sm btn-info" onclick="restartPod('${x.id}')"><i class="bi bi-arrow-clockwise"></i></button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deletePod('${x.id}')"><i class="bi bi-trash"></i></button>
-            </td></tr>`).join('');
-    });
+function showToast(message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    const toastId = 'toast-' + Date.now();
+    const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+    const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+    const toast = `<div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert"><div class="d-flex"><div class="toast-body"><i class="bi bi-${icon}"></i> ${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
+    toastContainer.insertAdjacentHTML('beforeend', toast);
+    const toastEl = new bootstrap.Toast(document.getElementById(toastId), { delay: 3000 });
+    toastEl.show();
+    setTimeout(() => document.getElementById(toastId)?.remove(), 4000);
 }
-function startPod(id) { fetch(`/api/pods/${id}/start`, {method: 'POST'}).then(()=>{ alert('Started'); loadPods(); }); }
-function stopPod(id) { fetch(`/api/pods/${id}/stop`, {method: 'POST'}).then(()=>{ alert('Stopped'); loadPods(); }); }
-function restartPod(id) { fetch(`/api/pods/${id}/restart`, {method: 'POST'}).then(()=>{ alert('Restarted'); loadPods(); }); }
-function deletePod(id) { if (!confirm('Delete pod?')) return; fetch(`/api/pods/${id}?force=true`, {method: 'DELETE'}).then(()=>{ alert('Deleted'); loadPods(); }); }
+
+function loadPods() {
+    fetch('/api/pods')
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to load pods');
+            return r.json();
+        })
+        .then(data=>{
+            const p = data.pods || []; const tbody = document.getElementById('podList');
+            tbody.innerHTML = p.length===0 ? '<tr><td colspan="4" class="text-center">No pods</td></tr>' :
+                p.map(x=>`<tr><td>${x.name||'N/A'}</td><td><span class="badge bg-info">${x.status||'unknown'}</span></td><td>${new Date(x.created).toLocaleString()}</td><td>
+                    <button class="btn btn-sm btn-success" onclick="startPod('${x.id}')"><i class="bi bi-play-circle"></i></button>
+                    <button class="btn btn-sm btn-warning" onclick="stopPod('${x.id}')"><i class="bi bi-stop-circle"></i></button>
+                    <button class="btn btn-sm btn-info" onclick="restartPod('${x.id}')"><i class="bi bi-arrow-clockwise"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deletePod('${x.id}')"><i class="bi bi-trash"></i></button>
+                </td></tr>`).join('');
+        })
+        .catch(err => showToast('Error loading pods: ' + err.message, 'error'));
+}
+
+function startPod(id) {
+    showToast('Starting pod...', 'info');
+    fetch(`/api/pods/${id}/start`, {method: 'POST'})
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to start pod');
+            return r.json();
+        })
+        .then(()=>{ showToast('Pod started successfully', 'success'); loadPods(); })
+        .catch(err => showToast('Error starting pod: ' + err.message, 'error'));
+}
+
+function stopPod(id) {
+    showToast('Stopping pod...', 'info');
+    fetch(`/api/pods/${id}/stop`, {method: 'POST'})
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to stop pod');
+            return r.json();
+        })
+        .then(()=>{ showToast('Pod stopped successfully', 'success'); loadPods(); })
+        .catch(err => showToast('Error stopping pod: ' + err.message, 'error'));
+}
+
+function restartPod(id) {
+    showToast('Restarting pod...', 'info');
+    fetch(`/api/pods/${id}/restart`, {method: 'POST'})
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to restart pod');
+            return r.json();
+        })
+        .then(()=>{ showToast('Pod restarted successfully', 'success'); loadPods(); })
+        .catch(err => showToast('Error restarting pod: ' + err.message, 'error'));
+}
+
+function deletePod(id) {
+    if (!confirm('Are you sure you want to delete this pod?')) return;
+    showToast('Deleting pod...', 'info');
+    fetch(`/api/pods/${id}?force=true`, {method: 'DELETE'})
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to delete pod');
+            return r.json();
+        })
+        .then(()=>{ showToast('Pod deleted successfully', 'success'); loadPods(); })
+        .catch(err => showToast('Error deleting pod: ' + err.message, 'error'));
+}
+
 loadPods(); setInterval(loadPods, 5000);
     </script>
 </body>

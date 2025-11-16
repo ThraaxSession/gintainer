@@ -42,8 +42,11 @@ type ContainerRuntime interface {
 	// BuildFromDockerfile builds an image from a Dockerfile
 	BuildFromDockerfile(ctx context.Context, dockerfile, imageName string) error
 
+	// RunContainer creates and runs a container from an image with configuration
+	RunContainer(ctx context.Context, req models.RunContainerRequest) (string, error)
+
 	// DeployFromCompose deploys containers from a compose file
-	DeployFromCompose(ctx context.Context, composeContent string) error
+	DeployFromCompose(ctx context.Context, composeContent, projectName, deploymentPath string) error
 
 	// PullImage pulls the latest version of an image
 	PullImage(ctx context.Context, imageName string) error

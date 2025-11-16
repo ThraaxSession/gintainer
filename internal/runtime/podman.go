@@ -2,14 +2,20 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ThraaxSession/gintainer/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 // PodmanRuntime implements ContainerRuntime for Podman
@@ -43,16 +49,112 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		return nil, fmt.Errorf("failed to list Podman containers: %w", err)
 	}
 
-	// Parse JSON output
-	// Note: This is simplified - in production, parse the actual JSON
-	var containers []models.ContainerInfo
+	// Parse JSON output from podman
+	var podmanContainers []struct {
+		ID      string            `json:"Id"`
+		Names   []string          `json:"Names"`
+		Image   string            `json:"Image"`
+		Status  string            `json:"Status"`
+		State   string            `json:"State"`
+		Created int64             `json:"Created"`
+		Labels  map[string]string `json:"Labels"`
+		Ports   []struct {
+			HostPort      json.Number `json:"host_port"`
+			ContainerPort json.Number `json:"container_port"`
+			Protocol      string      `json:"protocol"`
+		} `json:"Ports"`
+	}
 
 	if len(output) > 0 {
-		// For now, return basic info
-		// In a real implementation, you'd properly parse the JSON
-		containers = append(containers, models.ContainerInfo{
+		if err := json.Unmarshal(output, &podmanContainers); err != nil {
+			return nil, fmt.Errorf("failed to parse podman output: %w", err)
+		}
+	}
+
+	// Convert to common ContainerInfo format
+	containers := make([]models.ContainerInfo, 0, len(podmanContainers))
+	for _, pc := range podmanContainers {
+		name := ""
+		if len(pc.Names) > 0 {
+			name = pc.Names[0]
+		}
+
+		ports := make([]models.PortMapping, 0, len(pc.Ports))
+		for _, p := range pc.Ports {
+			hostPort, _ := p.HostPort.Int64()
+			containerPort, _ := p.ContainerPort.Int64()
+			ports = append(ports, models.PortMapping{
+				ContainerPort: int(containerPort),
+				HostPort:      int(hostPort),
+				Protocol:      p.Protocol,
+			})
+		}
+
+		containerInfo := models.ContainerInfo{
+			ID:      pc.ID,
+			Name:    name,
+			Image:   pc.Image,
+			Status:  pc.Status,
+			State:   pc.State,
 			Runtime: "podman",
-		})
+			Created: time.Unix(pc.Created, 0),
+			Labels:  pc.Labels,
+			Ports:   ports,
+		}
+
+		containers = append(containers, containerInfo)
+	}
+
+	// Add privileged and stats support if requested
+	for i := range containers {
+		if filterOpts.IncludePrivileged {
+			// Check if container is privileged using podman inspect
+			inspectCmd := exec.CommandContext(ctx, "podman", "inspect", "--format", "{{.HostConfig.Privileged}}", containers[i].ID)
+			if out, err := inspectCmd.Output(); err == nil {
+				containers[i].Privileged = strings.TrimSpace(string(out)) == "true"
+			}
+		}
+
+		if filterOpts.IncludeStats && containers[i].State == "running" {
+			// Get stats for running containers
+			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containers[i].ID)
+			if statsOut, err := statsCmd.Output(); err == nil && len(statsOut) > 0 {
+				var podmanStats []struct {
+					ID            string `json:"ID"`
+					Name          string `json:"Name"`
+					CPUPercentage string `json:"CPU"`
+					MemUsage      string `json:"MemUsage"`
+					MemPercentage string `json:"MemPerc"`
+					NetIO         string `json:"NetIO"`
+					BlockIO       string `json:"BlockIO"`
+					PIDs          string `json:"PIDs"`
+				}
+				if err := json.Unmarshal(statsOut, &podmanStats); err == nil && len(podmanStats) > 0 {
+					// Parse CPU percentage (format: "0.50%")
+					cpuStr := strings.TrimSuffix(podmanStats[0].CPUPercentage, "%")
+					cpuPerc, _ := strconv.ParseFloat(cpuStr, 64)
+
+					// Parse memory usage (format: "100MB / 8GB")
+					memParts := strings.Split(podmanStats[0].MemUsage, " / ")
+					var memUsage, memLimit uint64
+					if len(memParts) == 2 {
+						memUsage = parseSize(strings.TrimSpace(memParts[0]))
+						memLimit = parseSize(strings.TrimSpace(memParts[1]))
+					}
+
+					// Parse memory percentage (format: "1.25%")
+					memPercStr := strings.TrimSuffix(podmanStats[0].MemPercentage, "%")
+					memPerc, _ := strconv.ParseFloat(memPercStr, 64)
+
+					containers[i].Stats = &models.ContainerStats{
+						CPUPercent:    cpuPerc,
+						MemoryUsage:   memUsage,
+						MemoryLimit:   memLimit,
+						MemoryPercent: memPerc,
+					}
+				}
+			}
+		}
 	}
 
 	return containers, nil
@@ -75,13 +177,49 @@ func (p *PodmanRuntime) ListPods(ctx context.Context, filterOpts models.FilterOp
 		return nil, fmt.Errorf("failed to list Podman pods: %w", err)
 	}
 
-	// Parse JSON output
-	var pods []models.PodInfo
+	// Parse JSON output from podman
+	var podmanPods []struct {
+		ID         string `json:"Id"`
+		Name       string `json:"Name"`
+		Status     string `json:"Status"`
+		Created    string `json:"Created"`
+		Containers []struct {
+			ID     string `json:"Id"`
+			Names  string `json:"Names"`
+			Status string `json:"Status"`
+		} `json:"Containers"`
+	}
 
 	if len(output) > 0 {
-		// For now, return basic info
+		if err := json.Unmarshal(output, &podmanPods); err != nil {
+			return nil, fmt.Errorf("failed to parse podman pod output: %w", err)
+		}
+	}
+
+	// Convert to PodInfo format
+	pods := make([]models.PodInfo, 0, len(podmanPods))
+	for _, pp := range podmanPods {
+		// Extract container IDs from the Containers array
+		containerIDs := make([]string, 0, len(pp.Containers))
+		for _, c := range pp.Containers {
+			containerIDs = append(containerIDs, c.ID)
+		}
+
+		// Parse Created timestamp
+		created := time.Now()
+		if pp.Created != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, pp.Created); err == nil {
+				created = parsedTime
+			}
+		}
+
 		pods = append(pods, models.PodInfo{
-			Runtime: "podman",
+			ID:         pp.ID,
+			Name:       pp.Name,
+			Status:     pp.Status,
+			Created:    created,
+			Containers: containerIDs,
+			Runtime:    "podman",
 		})
 	}
 
@@ -196,24 +334,121 @@ func (p *PodmanRuntime) BuildFromDockerfile(ctx context.Context, dockerfile, ima
 	return nil
 }
 
-// DeployFromCompose deploys containers from a Podman Compose file
-func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent string) error {
-	// Create a temporary directory for the compose file
-	tempDir, err := os.MkdirTemp("", "podman-compose-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
+// RunContainer creates and runs a container from an image with configuration
+func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContainerRequest) (string, error) {
+	args := []string{"run", "-d", "--name", req.Name}
+
+	// Add restart policy
+	if req.RestartPolicy != "" {
+		args = append(args, "--restart", req.RestartPolicy)
 	}
-	defer os.RemoveAll(tempDir)
+
+	// Add port mappings
+	for _, portMap := range req.Ports {
+		args = append(args, "-p", portMap)
+	}
+
+	// Create named volumes if needed and add volume mappings
+	for _, volMap := range req.Volumes {
+		parts := strings.Split(volMap, ":")
+		if len(parts) >= 2 {
+			volumeName := parts[0]
+			// Check if it's a named volume (doesn't start with / or .)
+			if !strings.HasPrefix(volumeName, "/") && !strings.HasPrefix(volumeName, ".") {
+				// Create named volume if it doesn't exist
+				createCmd := exec.CommandContext(ctx, "podman", "volume", "create", volumeName)
+				output, err := createCmd.CombinedOutput()
+				if err != nil && !strings.Contains(string(output), "already exists") {
+					log.Printf("[WARN] RunContainer: Failed to create volume %q: %v: %s", volumeName, err, string(output))
+					// Continue anyway - container creation will fail if volume is truly needed
+				}
+			}
+		}
+		args = append(args, "-v", volMap)
+	}
+
+	// Add environment variables
+	for _, env := range req.EnvVars {
+		args = append(args, "-e", env)
+	}
+
+	// Add image name
+	args = append(args, req.Image)
+
+	// Run the container
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run container: %w", err)
+	}
+
+	// Container ID is returned in output
+	containerID := strings.TrimSpace(string(output))
+	return containerID, nil
+}
+
+// DeployFromCompose deploys containers from a Podman Compose file
+func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent, projectName, deploymentPath string) error {
+	// Use deployment path if provided, otherwise use temp directory
+	var composePath string
+	var cleanupFunc func()
+
+	if deploymentPath != "" {
+		// Create deployment directory if it doesn't exist
+		if err := os.MkdirAll(deploymentPath, 0755); err != nil {
+			return fmt.Errorf("failed to create deployment directory: %w", err)
+		}
+		composePath = filepath.Join(deploymentPath, "docker-compose.yml")
+		cleanupFunc = func() {} // No cleanup for permanent deployments
+	} else {
+		// Create a temporary directory for the compose file
+		tempDir, err := os.MkdirTemp("", "podman-compose-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temp directory: %w", err)
+		}
+		composePath = filepath.Join(tempDir, "docker-compose.yml")
+		cleanupFunc = func() { os.RemoveAll(tempDir) }
+	}
+	defer cleanupFunc()
+
+	// Parse compose file to extract service names for meaningful pod name (if projectName not provided)
+	if projectName == "" {
+		var compose struct {
+			Services map[string]interface{} `yaml:"services"`
+		}
+		if err := yaml.Unmarshal([]byte(composeContent), &compose); err == nil && len(compose.Services) > 0 {
+			// Extract and sort service names
+			serviceNames := make([]string, 0, len(compose.Services))
+			for name := range compose.Services {
+				serviceNames = append(serviceNames, name)
+			}
+			sort.Strings(serviceNames)
+
+			// Create project name from service names (limit to first 5 services to avoid too long names)
+			maxServices := 5
+			if len(serviceNames) > maxServices {
+				serviceNames = serviceNames[:maxServices]
+			}
+			// Use service names as project name which will be used by podman-compose for pod naming
+			projectName = strings.Join(serviceNames, "_")
+		}
+	}
 
 	// Write compose file
-	composePath := filepath.Join(tempDir, "docker-compose.yml")
 	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write compose file: %w", err)
 	}
 
 	// Use podman-compose if available
 	if _, err := exec.LookPath("podman-compose"); err == nil {
-		cmd := exec.CommandContext(ctx, "podman-compose", "-f", composePath, "up", "-d")
+		args := []string{"-f", composePath}
+		// Add project name if we have one
+		if projectName != "" {
+			args = append(args, "-p", projectName)
+		}
+		args = append(args, "up", "-d")
+
+		cmd := exec.CommandContext(ctx, "podman-compose", args...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to deploy with podman-compose: %w, output: %s", err, string(output))
 		}
@@ -321,4 +556,33 @@ func (c *cmdReadCloser) Close() error {
 // GetRuntimeName returns "podman"
 func (p *PodmanRuntime) GetRuntimeName() string {
 	return "podman"
+}
+
+// parseSize parses a size string like "100MB" or "8GB" to bytes
+func parseSize(sizeStr string) uint64 {
+	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
+	var multiplier uint64 = 1
+
+	if strings.HasSuffix(sizeStr, "KB") {
+		multiplier = 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "KB")
+	} else if strings.HasSuffix(sizeStr, "MB") {
+		multiplier = 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "MB")
+	} else if strings.HasSuffix(sizeStr, "GB") {
+		multiplier = 1024 * 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "GB")
+	} else if strings.HasSuffix(sizeStr, "TB") {
+		multiplier = 1024 * 1024 * 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "TB")
+	} else if strings.HasSuffix(sizeStr, "B") {
+		sizeStr = strings.TrimSuffix(sizeStr, "B")
+	}
+
+	val, err := strconv.ParseFloat(sizeStr, 64)
+	if err != nil {
+		return 0
+	}
+
+	return uint64(val * float64(multiplier))
 }

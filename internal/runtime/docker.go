@@ -2,9 +2,12 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,8 +17,10 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/go-connections/nat"
 )
 
 // DockerRuntime implements ContainerRuntime for Docker
@@ -67,7 +72,7 @@ func (d *DockerRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 			})
 		}
 
-		result = append(result, models.ContainerInfo{
+		containerInfo := models.ContainerInfo{
 			ID:      c.ID,
 			Name:    name,
 			Image:   c.Image,
@@ -77,10 +82,92 @@ func (d *DockerRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 			Created: time.Unix(c.Created, 0),
 			Labels:  c.Labels,
 			Ports:   ports,
-		})
+		}
+
+		// Check if container is privileged by inspecting it
+		if filterOpts.IncludePrivileged {
+			inspect, err := d.client.ContainerInspect(ctx, c.ID)
+			if err == nil && inspect.HostConfig != nil {
+				containerInfo.Privileged = inspect.HostConfig.Privileged
+			}
+		}
+
+		// Get stats if requested and container is running
+		if filterOpts.IncludeStats && c.State == "running" {
+			stats, err := d.getContainerStats(ctx, c.ID)
+			if err == nil {
+				containerInfo.Stats = stats
+			}
+		}
+
+		result = append(result, containerInfo)
 	}
 
 	return result, nil
+}
+
+// getContainerStats retrieves real-time stats for a container
+func (d *DockerRuntime) getContainerStats(ctx context.Context, containerID string) (*models.ContainerStats, error) {
+	stats, err := d.client.ContainerStats(ctx, containerID, false)
+	if err != nil {
+		return nil, err
+	}
+	defer stats.Body.Close()
+
+	var v container.StatsResponse
+	if err := json.NewDecoder(stats.Body).Decode(&v); err != nil {
+		return nil, err
+	}
+
+	// Calculate CPU percentage
+	cpuPercent := calculateCPUPercent(&v)
+
+	// Calculate memory percentage
+	memPercent := 0.0
+	if v.MemoryStats.Limit > 0 {
+		memPercent = float64(v.MemoryStats.Usage) / float64(v.MemoryStats.Limit) * 100.0
+	}
+
+	// Calculate network I/O
+	var networkRx, networkTx uint64
+	for _, net := range v.Networks {
+		networkRx += net.RxBytes
+		networkTx += net.TxBytes
+	}
+
+	// Calculate block I/O
+	var blockRead, blockWrite uint64
+	for _, bio := range v.BlkioStats.IoServiceBytesRecursive {
+		if bio.Op == "Read" {
+			blockRead += bio.Value
+		} else if bio.Op == "Write" {
+			blockWrite += bio.Value
+		}
+	}
+
+	return &models.ContainerStats{
+		CPUPercent:    cpuPercent,
+		MemoryUsage:   v.MemoryStats.Usage,
+		MemoryLimit:   v.MemoryStats.Limit,
+		MemoryPercent: memPercent,
+		NetworkRx:     networkRx,
+		NetworkTx:     networkTx,
+		BlockRead:     blockRead,
+		BlockWrite:    blockWrite,
+		PIDs:          v.PidsStats.Current,
+	}, nil
+}
+
+// calculateCPUPercent calculates CPU usage percentage
+func calculateCPUPercent(stats *container.StatsResponse) float64 {
+	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
+	cpuCount := float64(stats.CPUStats.OnlineCPUs)
+
+	if systemDelta > 0 && cpuDelta > 0 {
+		return (cpuDelta / systemDelta) * cpuCount * 100.0
+	}
+	return 0.0
 }
 
 // ListPods returns an empty list (Docker doesn't have pods)
@@ -192,24 +279,137 @@ func (d *DockerRuntime) BuildFromDockerfile(ctx context.Context, dockerfile, ima
 	return nil
 }
 
-// DeployFromCompose deploys containers from a Docker Compose file
-func (d *DockerRuntime) DeployFromCompose(ctx context.Context, composeContent string) error {
-	// Create a temporary directory for the compose file
-	tempDir, err := os.MkdirTemp("", "docker-compose-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
+// RunContainer creates and runs a container from an image with configuration
+func (d *DockerRuntime) RunContainer(ctx context.Context, req models.RunContainerRequest) (string, error) {
+	// Parse port bindings
+	portBindings := nat.PortMap{}
+	exposedPorts := nat.PortSet{}
+	for _, portMap := range req.Ports {
+		parts := strings.Split(portMap, ":")
+		if len(parts) == 2 {
+			containerPort, err := nat.NewPort("tcp", parts[1])
+			if err != nil {
+				continue
+			}
+			exposedPorts[containerPort] = struct{}{}
+			portBindings[containerPort] = []nat.PortBinding{
+				{HostPort: parts[0]},
+			}
+		}
 	}
-	defer os.RemoveAll(tempDir)
+
+	// Parse volume bindings and create named volumes if needed
+	binds := make([]string, 0, len(req.Volumes))
+	for _, vol := range req.Volumes {
+		parts := strings.Split(vol, ":")
+		if len(parts) >= 2 {
+			// Check if it's a named volume (doesn't start with / or .)
+			volumeName := parts[0]
+			if !strings.HasPrefix(volumeName, "/") && !strings.HasPrefix(volumeName, ".") {
+				// Create named volume if it doesn't exist
+				_, err := d.client.VolumeCreate(ctx, volume.CreateOptions{
+					Name: volumeName,
+				})
+				if err != nil && !strings.Contains(err.Error(), "already exists") {
+					log.Printf("[WARN] RunContainer: Failed to create volume %q: %v", volumeName, err)
+					// Continue anyway - container creation will fail if volume is truly needed
+				}
+			}
+			binds = append(binds, vol)
+		}
+	}
+
+	// Create container config
+	config := &container.Config{
+		Image:        req.Image,
+		Env:          req.EnvVars,
+		ExposedPorts: exposedPorts,
+	}
+
+	// Create host config
+	hostConfig := &container.HostConfig{
+		PortBindings: portBindings,
+		Binds:        binds,
+		RestartPolicy: container.RestartPolicy{
+			Name: container.RestartPolicyMode(req.RestartPolicy),
+		},
+	}
+
+	// Create container
+	resp, err := d.client.ContainerCreate(ctx, config, hostConfig, nil, nil, req.Name)
+	if err != nil {
+		return "", fmt.Errorf("failed to create container: %w", err)
+	}
+
+	// Start container
+	if err := d.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return "", fmt.Errorf("failed to start container: %w", err)
+	}
+
+	return resp.ID, nil
+}
+
+// DeployFromCompose deploys containers from a Docker Compose file
+func (d *DockerRuntime) DeployFromCompose(ctx context.Context, composeContent, projectName, deploymentPath string) error {
+	// Use deployment path if provided, otherwise use temp directory
+	var composePath string
+	var cleanupFunc func()
+
+	if deploymentPath != "" {
+		// Create deployment directory if it doesn't exist
+		if err := os.MkdirAll(deploymentPath, 0755); err != nil {
+			return fmt.Errorf("failed to create deployment directory: %w", err)
+		}
+		composePath = filepath.Join(deploymentPath, "docker-compose.yml")
+		cleanupFunc = func() {} // No cleanup for permanent deployments
+	} else {
+		// Create a temporary directory for the compose file
+		tempDir, err := os.MkdirTemp("", "docker-compose-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temp directory: %w", err)
+		}
+		composePath = filepath.Join(tempDir, "docker-compose.yml")
+		cleanupFunc = func() { os.RemoveAll(tempDir) }
+	}
+	defer cleanupFunc()
 
 	// Write compose file
-	composePath := filepath.Join(tempDir, "docker-compose.yml")
 	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write compose file: %w", err)
 	}
 
-	// Note: This is a simplified implementation
-	// In production, you'd want to use docker-compose or docker compose CLI
-	return fmt.Errorf("Docker Compose deployment requires docker-compose CLI")
+	// Try docker compose (v2) first, then fall back to docker-compose (v1)
+	var cmd *exec.Cmd
+	if _, err := exec.LookPath("docker"); err == nil {
+		args := []string{"compose", "-f", composePath}
+		if projectName != "" {
+			args = append(args, "-p", projectName)
+		}
+		args = append(args, "up", "-d")
+
+		// Try docker compose (v2)
+		cmd = exec.CommandContext(ctx, "docker", args...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			// Try docker-compose (v1) as fallback
+			if _, err := exec.LookPath("docker-compose"); err == nil {
+				fallbackArgs := []string{"-f", composePath}
+				if projectName != "" {
+					fallbackArgs = append(fallbackArgs, "-p", projectName)
+				}
+				fallbackArgs = append(fallbackArgs, "up", "-d")
+
+				cmd = exec.CommandContext(ctx, "docker-compose", fallbackArgs...)
+				if output, err := cmd.CombinedOutput(); err != nil {
+					return fmt.Errorf("failed to deploy with docker-compose: %w, output: %s", err, string(output))
+				}
+				return nil
+			}
+			return fmt.Errorf("failed to deploy with docker compose: %w, output: %s", err, string(output))
+		}
+		return nil
+	}
+
+	return fmt.Errorf("docker CLI not found in PATH")
 }
 
 // PullImage pulls the latest version of a Docker image
