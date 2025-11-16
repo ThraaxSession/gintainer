@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/ThraaxSession/gintainer/internal/config"
+	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/ThraaxSession/gintainer/internal/runtime"
 	"github.com/gin-gonic/gin"
 )
@@ -72,31 +72,31 @@ func (w *WebHandler) ConfigPage(c *gin.Context) {
 
 // GetConfig handles GET /api/config
 func (w *WebHandler) GetConfig(c *gin.Context) {
-	log.Printf("[INFO] GetConfig: Retrieving configuration")
+	logger.Printf("[INFO] GetConfig: Retrieving configuration")
 	cfg := w.configManager.GetConfig()
 	c.JSON(http.StatusOK, cfg)
 }
 
 // UpdateConfigAPI handles POST /api/config
 func (w *WebHandler) UpdateConfigAPI(c *gin.Context) {
-	log.Printf("[INFO] UpdateConfigAPI: Received configuration update request from %s", c.ClientIP())
+	logger.Printf("[INFO] UpdateConfigAPI: Received configuration update request from %s", c.ClientIP())
 
 	var cfg config.Config
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		log.Printf("[ERROR] UpdateConfigAPI: Invalid request body: %v", err)
+		logger.Printf("[ERROR] UpdateConfigAPI: Invalid request body: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("[INFO] UpdateConfigAPI: Updating configuration - Server Port: %s, Mode: %s, Docker: %v, Podman: %v, Theme: %s, BasePath: %s",
+	logger.Printf("[INFO] UpdateConfigAPI: Updating configuration - Server Port: %s, Mode: %s, Docker: %v, Podman: %v, Theme: %s, BasePath: %s",
 		cfg.Server.Port, cfg.Server.Mode, cfg.Docker.Enabled, cfg.Podman.Enabled, cfg.UI.Theme, cfg.Deployment.BasePath)
 
 	if err := w.configManager.UpdateConfig(&cfg); err != nil {
-		log.Printf("[ERROR] UpdateConfigAPI: Failed to update configuration: %v", err)
+		logger.Printf("[ERROR] UpdateConfigAPI: Failed to update configuration: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("[INFO] UpdateConfigAPI: Configuration updated and saved successfully")
+	logger.Printf("[INFO] UpdateConfigAPI: Configuration updated and saved successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "configuration updated successfully"})
 }

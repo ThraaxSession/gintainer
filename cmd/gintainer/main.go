@@ -1,12 +1,12 @@
 package main
 
 import (
-	"log"
 	"os"
 
 	"github.com/ThraaxSession/gintainer/internal/caddy"
 	"github.com/ThraaxSession/gintainer/internal/config"
 	"github.com/ThraaxSession/gintainer/internal/handlers"
+	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/ThraaxSession/gintainer/internal/models"
 	"github.com/ThraaxSession/gintainer/internal/runtime"
 	"github.com/ThraaxSession/gintainer/internal/scheduler"
@@ -22,7 +22,7 @@ func main() {
 
 	configManager, err := config.NewManager(configPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize config manager: %v", err)
+		logger.Fatalf("Failed to initialize config manager: %v", err)
 	}
 	defer configManager.Close()
 
@@ -38,10 +38,10 @@ func main() {
 	if cfg.Docker.Enabled {
 		dockerRuntime, err := runtime.NewDockerRuntime()
 		if err != nil {
-			log.Printf("Warning: Failed to initialize Docker runtime: %v", err)
+			logger.Printf("Warning: Failed to initialize Docker runtime: %v", err)
 		} else {
 			runtimeManager.RegisterRuntime("docker", dockerRuntime)
-			log.Println("Docker runtime initialized")
+			logger.Println("Docker runtime initialized")
 		}
 	}
 
@@ -49,16 +49,16 @@ func main() {
 	if cfg.Podman.Enabled {
 		podmanRuntime, err := runtime.NewPodmanRuntime()
 		if err != nil {
-			log.Printf("Warning: Failed to initialize Podman runtime: %v", err)
+			logger.Printf("Warning: Failed to initialize Podman runtime: %v", err)
 		} else {
 			runtimeManager.RegisterRuntime("podman", podmanRuntime)
-			log.Println("Podman runtime initialized")
+			logger.Println("Podman runtime initialized")
 		}
 	}
 
 	// Check if at least one runtime is available
 	if len(runtimeManager.GetAllRuntimes()) == 0 {
-		log.Fatal("No container runtime available. Please install Docker or Podman.")
+		logger.Fatal("No container runtime available. Please install Docker or Podman.")
 	}
 
 	// Initialize scheduler
@@ -72,7 +72,7 @@ func main() {
 			Filters:  cfg.Scheduler.Filters,
 		}
 		if err := sched.UpdateConfig(schedConfig); err != nil {
-			log.Printf("Warning: Failed to configure scheduler: %v", err)
+			logger.Printf("Warning: Failed to configure scheduler: %v", err)
 		}
 	}
 
@@ -82,7 +82,7 @@ func main() {
 	// Initialize Caddy service
 	caddyService := caddy.NewService(&cfg.Caddy)
 	if cfg.Caddy.Enabled {
-		log.Println("Caddy integration enabled")
+		logger.Println("Caddy integration enabled")
 	}
 
 	// Initialize handlers
@@ -152,7 +152,7 @@ func main() {
 
 	// Set up hot-reload for configuration
 	configManager.SetOnChange(func(newConfig *config.Config) {
-		log.Println("Configuration changed, applying new settings...")
+		logger.Println("Configuration changed, applying new settings...")
 
 		// Update scheduler if config changed
 		schedConfig := models.CronJobConfig{
@@ -161,15 +161,15 @@ func main() {
 			Filters:  newConfig.Scheduler.Filters,
 		}
 		if err := sched.UpdateConfig(schedConfig); err != nil {
-			log.Printf("Error updating scheduler config: %v", err)
+			logger.Printf("Error updating scheduler config: %v", err)
 		}
 
 		// Update Caddy service if config changed
 		caddyService.UpdateConfig(&newConfig.Caddy)
 		if newConfig.Caddy.Enabled {
-			log.Println("Caddy integration enabled via config reload")
+			logger.Println("Caddy integration enabled via config reload")
 		} else {
-			log.Println("Caddy integration disabled via config reload")
+			logger.Println("Caddy integration disabled via config reload")
 		}
 	})
 	configManager.StartWatching()
@@ -180,9 +180,9 @@ func main() {
 		port = cfg.Server.Port
 	}
 
-	log.Printf("Starting Gintainer on port %s", port)
-	log.Printf("Web UI available at http://localhost:%s", port)
+	logger.Printf("Starting Gintainer on port %s", port)
+	logger.Printf("Web UI available at http://localhost:%s", port)
 	if err := router.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		logger.Fatalf("Failed to start server: %v", err)
 	}
 }

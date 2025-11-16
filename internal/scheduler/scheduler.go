@@ -3,9 +3,9 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
+	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/ThraaxSession/gintainer/internal/models"
 	"github.com/ThraaxSession/gintainer/internal/runtime"
 	"github.com/robfig/cron/v3"
@@ -81,18 +81,18 @@ func (s *Scheduler) runUpdate() {
 	config := *s.config
 	s.mu.RUnlock()
 
-	log.Println("Starting scheduled container update")
+	logger.Println("Starting scheduled container update")
 
 	ctx := context.Background()
 
 	// Update containers across all runtimes
 	for runtimeName, rt := range s.runtimeManager.GetAllRuntimes() {
-		log.Printf("Updating containers in %s runtime", runtimeName)
+		logger.Printf("Updating containers in %s runtime", runtimeName)
 
 		// List all containers
 		containers, err := rt.ListContainers(ctx, models.FilterOptions{})
 		if err != nil {
-			log.Printf("Failed to list containers for %s: %v", runtimeName, err)
+			logger.Printf("Failed to list containers for %s: %v", runtimeName, err)
 			continue
 		}
 
@@ -112,16 +112,16 @@ func (s *Scheduler) runUpdate() {
 				}
 			}
 
-			log.Printf("Updating container: %s (%s)", container.Name, container.ID)
+			logger.Printf("Updating container: %s (%s)", container.Name, container.ID)
 			if err := rt.UpdateContainer(ctx, container.ID); err != nil {
-				log.Printf("Failed to update container %s: %v", container.ID, err)
+				logger.Printf("Failed to update container %s: %v", container.ID, err)
 			} else {
-				log.Printf("Successfully updated container: %s", container.Name)
+				logger.Printf("Successfully updated container: %s", container.Name)
 			}
 		}
 	}
 
-	log.Println("Scheduled container update completed")
+	logger.Println("Scheduled container update completed")
 }
 
 // matchesFilter checks if a container name matches a filter pattern
