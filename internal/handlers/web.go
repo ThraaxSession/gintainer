@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/ThraaxSession/gintainer/internal/config"
 	"github.com/ThraaxSession/gintainer/internal/logger"
@@ -70,6 +71,15 @@ func (w *WebHandler) ConfigPage(c *gin.Context) {
 	})
 }
 
+// LogsPage renders the logs page
+func (w *WebHandler) LogsPage(c *gin.Context) {
+	cfg := w.configManager.GetConfig()
+	c.HTML(http.StatusOK, "logs.html", gin.H{
+		"title": cfg.UI.Title,
+		"theme": cfg.UI.Theme,
+	})
+}
+
 // GetConfig handles GET /api/config
 func (w *WebHandler) GetConfig(c *gin.Context) {
 	logger.Info("GetConfig: Retrieving configuration")
@@ -98,4 +108,61 @@ func (w *WebHandler) UpdateConfigAPI(c *gin.Context) {
 
 	logger.Info("UpdateConfigAPI: Configuration updated and saved successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "configuration updated successfully"})
+}
+
+// StreamLogs handles GET /api/logs - streams application logs via SSE
+func (w *WebHandler) StreamLogs(c *gin.Context) {
+	logger.Info("StreamLogs: Client connected for log streaming", "client_ip", c.ClientIP())
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	// Get historical logs
+	logBuffer := logger.GetLogBuffer()
+	if logBuffer != nil {
+		entries := logBuffer.GetAll()
+		for _, entry := range entries {
+			formattedLog := logger.FormatLogEntry(entry)
+			c.SSEvent("log", formattedLog)
+			c.Writer.Flush()
+		}
+	}
+
+	// Keep connection alive and send new logs as they come
+	clientGone := c.Request.Context().Done()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	lastCount := 0
+	if logBuffer != nil {
+		lastCount = len(logBuffer.GetAll())
+	}
+
+	for {
+		select {
+		case <-clientGone:
+			logger.Info("StreamLogs: Client disconnected", "client_ip", c.ClientIP())
+			return
+		case <-ticker.C:
+			// Check for new logs
+			if logBuffer != nil {
+				entries := logBuffer.GetAll()
+				currentCount := len(entries)
+				if currentCount > lastCount {
+					// Send only new logs
+					for i := lastCount; i < currentCount; i++ {
+						formattedLog := logger.FormatLogEntry(entries[i])
+						c.SSEvent("log", formattedLog)
+						c.Writer.Flush()
+					}
+					lastCount = currentCount
+				}
+			}
+			// Send heartbeat to keep connection alive
+			c.SSEvent("heartbeat", "ping")
+			c.Writer.Flush()
+		}
+	}
 }

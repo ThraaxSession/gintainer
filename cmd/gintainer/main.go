@@ -106,6 +106,7 @@ func main() {
 	router.GET("/pods", webHandler.PodsPage)
 	router.GET("/scheduler", webHandler.SchedulerPage)
 	router.GET("/config", webHandler.ConfigPage)
+	router.GET("/logs", webHandler.LogsPage)
 
 	// API v1 routes
 	api := router.Group("/api")
@@ -148,6 +149,9 @@ func main() {
 		// Config routes
 		api.GET("/config", webHandler.GetConfig)
 		api.POST("/config", webHandler.UpdateConfigAPI)
+
+		// Logs routes
+		api.GET("/logs", webHandler.StreamLogs)
 	}
 
 	// Set up hot-reload for configuration
