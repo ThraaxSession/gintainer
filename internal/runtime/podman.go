@@ -120,14 +120,14 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containers[i].ID)
 			if statsOut, err := statsCmd.Output(); err == nil && len(statsOut) > 0 {
 				var podmanStats []struct {
-					ID            string `json:"ID"`
-					Name          string `json:"Name"`
-					CPUPercentage string `json:"CPU"`
-					MemUsage      string `json:"MemUsage"`
-					MemPercentage string `json:"MemPerc"`
-					NetIO         string `json:"NetIO"`
-					BlockIO       string `json:"BlockIO"`
-					PIDs          string `json:"PIDs"`
+					ID            string `json:"id"`
+					Name          string `json:"name"`
+					CPUPercentage string `json:"cpu_percent"`
+					MemUsage      string `json:"mem_usage"`
+					MemPercentage string `json:"mem_percent"`
+					NetIO         string `json:"net_io"`
+					BlockIO       string `json:"block_io"`
+					PIDs          string `json:"pids"`
 				}
 				if err := json.Unmarshal(statsOut, &podmanStats); err == nil && len(podmanStats) > 0 {
 					// Parse CPU percentage (format: "0.50%")
