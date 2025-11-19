@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/ThraaxSession/gintainer/internal/config"
 	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/ThraaxSession/gintainer/internal/models"
 	"github.com/ThraaxSession/gintainer/internal/scheduler"
@@ -11,13 +12,15 @@ import (
 
 // SchedulerHandler manages scheduler-related HTTP handlers
 type SchedulerHandler struct {
-	scheduler *scheduler.Scheduler
+	scheduler     *scheduler.Scheduler
+	configManager *config.Manager
 }
 
 // NewSchedulerHandler creates a new scheduler handler
-func NewSchedulerHandler(scheduler *scheduler.Scheduler) *SchedulerHandler {
+func NewSchedulerHandler(scheduler *scheduler.Scheduler, configManager *config.Manager) *SchedulerHandler {
 	return &SchedulerHandler{
-		scheduler: scheduler,
+		scheduler:     scheduler,
+		configManager: configManager,
 	}
 }
 
@@ -41,10 +44,25 @@ func (sh *SchedulerHandler) UpdateConfig(c *gin.Context) {
 
 	logger.Info("UpdateConfig: Updating scheduler - Enabled: , Schedule: , Filters", "arg1", config.Enabled, "arg2", config.Schedule, "filter3", config.Filters)
 
+	// Update scheduler runtime state
 	if err := sh.scheduler.UpdateConfig(config); err != nil {
 		logger.Error("UpdateConfig: Failed to update scheduler configuration", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Persist to config file
+	cfg := sh.configManager.GetConfig()
+	cfg.Scheduler.Enabled = config.Enabled
+	cfg.Scheduler.Schedule = config.Schedule
+	cfg.Scheduler.Filters = config.Filters
+
+	if err := sh.configManager.UpdateConfig(cfg); err != nil {
+		logger.Error("UpdateConfig: Failed to persist scheduler configuration to file", "error", err)
+		// Don't fail the request - the runtime state is already updated
+		logger.Warn("UpdateConfig: Scheduler configuration updated in memory but not persisted to file")
+	} else {
+		logger.Info("UpdateConfig: Scheduler configuration persisted to config file")
 	}
 
 	logger.Info("UpdateConfig: Scheduler configuration updated successfully")
