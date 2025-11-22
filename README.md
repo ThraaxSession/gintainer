@@ -52,6 +52,8 @@ docker run -d \
   gintainer
 
 # Or run with Podman socket mounted (for Podman management)
+# Note: Podman socket is mounted to the standard Docker socket path
+# because Gintainer uses the Docker API which Podman also supports
 podman run -d \
   -p 8080:8080 \
   -v /run/podman/podman.sock:/var/run/docker.sock \
@@ -70,11 +72,13 @@ docker run -d \
 ```
 
 **Important Notes:**
-- The Docker/Podman socket must be mounted into the container for Gintainer to manage containers
-- Default Docker socket: `/var/run/docker.sock`
-- Default Podman socket: `/run/podman/podman.sock`
-- You can customize the configuration by mounting your own `gintainer.yaml` file
-- The container runs as a non-root user (UID 1000) for security
+- **Socket Mounting**: The Docker/Podman socket must be mounted into the container for Gintainer to manage containers
+  - Docker socket: `/var/run/docker.sock` (both host and container)
+  - Podman socket: `/run/podman/podman.sock` (host) → `/var/run/docker.sock` (container)
+  - Podman's socket is mounted to the Docker socket path because Podman is Docker-API compatible
+- **Configuration**: The default `gintainer.yaml` is included in the image. Mount your own configuration file to customize settings
+- **Security**: The container runs as a non-root user (UID 1000) for security
+- **Environment Variables**: You can override settings using environment variables (e.g., `PORT`, `CONFIG_PATH`)
 
 ### Option 2: Build from Source
 
