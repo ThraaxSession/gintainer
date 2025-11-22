@@ -22,6 +22,62 @@ A Golang application built with the Gin framework for managing containers and po
 
 ## Installation
 
+### Option 1: Docker (Recommended)
+
+#### Using Docker Compose (Easiest)
+
+```bash
+# Start Gintainer with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop Gintainer
+docker-compose down
+```
+
+#### Using Docker CLI
+
+```bash
+# Build the Docker image
+docker build -t gintainer .
+
+# Run with Docker socket mounted (for Docker management)
+docker run -d \
+  -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
+  --name gintainer \
+  gintainer
+
+# Or run with Podman socket mounted (for Podman management)
+podman run -d \
+  -p 8080:8080 \
+  -v /run/podman/podman.sock:/var/run/docker.sock \
+  -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
+  --name gintainer \
+  gintainer
+
+# For both Docker and Podman access, mount both sockets
+docker run -d \
+  -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /run/podman/podman.sock:/run/podman/podman.sock \
+  -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
+  --name gintainer \
+  gintainer
+```
+
+**Important Notes:**
+- The Docker/Podman socket must be mounted into the container for Gintainer to manage containers
+- Default Docker socket: `/var/run/docker.sock`
+- Default Podman socket: `/run/podman/podman.sock`
+- You can customize the configuration by mounting your own `gintainer.yaml` file
+- The container runs as a non-root user (UID 1000) for security
+
+### Option 2: Build from Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/ThraaxSession/gintainer.git
