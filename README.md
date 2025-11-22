@@ -22,6 +22,66 @@ A Golang application built with the Gin framework for managing containers and po
 
 ## Installation
 
+### Option 1: Docker (Recommended)
+
+#### Using Docker Compose (Easiest)
+
+```bash
+# Start Gintainer with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop Gintainer
+docker-compose down
+```
+
+#### Using Docker CLI
+
+```bash
+# Build the Docker image
+docker build -t gintainer .
+
+# Run with Docker socket mounted (for Docker management)
+docker run -d \
+  -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
+  --name gintainer \
+  gintainer
+
+# Or run with Podman socket mounted (for Podman management)
+# Note: Podman socket is mounted to the standard Docker socket path
+# because Gintainer uses the Docker API which Podman also supports
+podman run -d \
+  -p 8080:8080 \
+  -v /run/podman/podman.sock:/var/run/docker.sock \
+  -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
+  --name gintainer \
+  gintainer
+
+# For both Docker and Podman access, mount both sockets
+docker run -d \
+  -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /run/podman/podman.sock:/run/podman/podman.sock \
+  -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
+  --name gintainer \
+  gintainer
+```
+
+**Important Notes:**
+- **Socket Mounting**: The Docker/Podman socket must be mounted into the container for Gintainer to manage containers
+  - Docker socket: `/var/run/docker.sock` (both host and container)
+  - Podman socket: `/run/podman/podman.sock` (host) → `/var/run/docker.sock` (container)
+  - Podman's socket is mounted to the Docker socket path because Podman is Docker-API compatible
+- **Configuration**: The default `gintainer.yaml` is included in the image. Mount your own configuration file to customize settings
+- **Security**: The container runs as a non-root user (UID 1000) for security
+- **Environment Variables**: You can override settings using environment variables (e.g., `PORT`, `CONFIG_PATH`)
+
+### Option 2: Build from Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/ThraaxSession/gintainer.git
