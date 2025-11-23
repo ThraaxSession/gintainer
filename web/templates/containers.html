@@ -94,7 +94,7 @@ function loadContainers() {
                     return `<tr><td>${x.name}${privilegedBadge}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>${portsDisplay}</td><td>${caddyDomain}</td><td>${caddyPort}</td><td>${created}</td><td>${cpuDisplay}</td><td>${memDisplay}</td><td>
                         ${x.state==='running'?`<button class="btn btn-sm btn-warning" onclick="stopContainer('${x.id}','${x.runtime}')"><i class="bi bi-stop-circle"></i></button>`:`<button class="btn btn-sm btn-success" onclick="startContainer('${x.id}','${x.runtime}')"><i class="bi bi-play-circle"></i></button>`}
                         <button class="btn btn-sm btn-info" onclick="restartContainer('${x.id}','${x.runtime}')"><i class="bi bi-arrow-clockwise"></i></button>
-                        <button class="btn btn-sm ${hasCaddy?'btn-primary':'btn-outline-primary'}" onclick="configureCaddy('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-gear"></i></button>
+                        <button class="btn btn-sm ${hasCaddy?'btn-primary':'btn-outline-primary'}" onclick='configureCaddy(${JSON.stringify(x)})'><i class="bi bi-gear"></i></button>
                         <button class="btn btn-sm btn-outline-primary" onclick="viewLogs('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-file-text"></i></button>
                         <button class="btn btn-sm btn-outline-danger" onclick="deleteContainer('${x.id}','${x.runtime}')"><i class="bi bi-trash"></i></button>
                     </td></tr>`;
@@ -281,10 +281,10 @@ function viewLogs(id, name, rt) {
 let currentCaddyContainerID = '';
 let currentCaddyContainerRuntime = '';
 
-function configureCaddy(id, name, rt) {
-    currentCaddyContainerID = id;
-    currentCaddyContainerRuntime = rt;
-    document.getElementById('caddyContainerName').textContent = name;
+function configureCaddy(container) {
+    currentCaddyContainerID = container.id;
+    currentCaddyContainerRuntime = container.runtime;
+    document.getElementById('caddyContainerName').textContent = container.name;
     
     // Reset form and clear validation
     const form = document.getElementById('caddyForm');
@@ -295,19 +295,22 @@ function configureCaddy(id, name, rt) {
     document.getElementById('caddyPath').value = '/';
     document.getElementById('caddyTLS').value = 'auto';
     
-    // Load existing Caddy labels
-    fetch(`/api/containers?runtime=${rt}`)
-        .then(r => r.json())
-        .then(data => {
-            const container = data.containers.find(c => c.id === id || c.id.startsWith(id) || id.startsWith(c.id));
-            if (container && container.labels) {
-                document.getElementById('caddyDomain').value = container.labels['caddy.domain'] || '';
-                document.getElementById('caddyPort').value = container.labels['caddy.port'] || '';
-                document.getElementById('caddyPath').value = container.labels['caddy.path'] || '/';
-                document.getElementById('caddyTLS').value = container.labels['caddy.tls'] || 'auto';
-            }
-        })
-        .catch(err => console.error('Error loading container labels:', err));
+    // Check if container has existing Caddy labels
+    if (container.labels) {
+        document.getElementById('caddyDomain').value = container.labels['caddy.domain'] || '';
+        document.getElementById('caddyPort').value = container.labels['caddy.port'] || '';
+        document.getElementById('caddyPath').value = container.labels['caddy.path'] || '/';
+        document.getElementById('caddyTLS').value = container.labels['caddy.tls'] || 'auto';
+    }
+    
+    // If no caddy.port is set, try to prefill with the first exposed container port
+    if (!document.getElementById('caddyPort').value && container.ports && container.ports.length > 0) {
+        // Use the first container port as default
+        const firstPort = container.ports[0].container_port;
+        if (firstPort) {
+            document.getElementById('caddyPort').value = firstPort;
+        }
+    }
     
     new bootstrap.Modal(document.getElementById('caddyModal')).show();
 }

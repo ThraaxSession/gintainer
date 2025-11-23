@@ -44,15 +44,7 @@ Once configured, the Caddy Domain and Port are displayed in the container list t
 
 ## Runtime Support
 
-### Podman (Full Support)
-
-Podman fully supports updating and removing labels on existing containers. You can configure Caddy labels at any time:
-
-- ✅ Create container with labels
-- ✅ Update labels on running containers
-- ✅ Remove labels from existing containers
-
-### Docker (Limited Support)
+### Docker (No Support for Label Updates)
 
 **Important:** Docker has a limitation where labels cannot be updated on existing containers. Labels can only be set during container creation.
 
@@ -85,6 +77,20 @@ services:
     ports:
       - "8080:8080"
 ```
+
+### Podman (No Support for Label Updates)
+
+**Important:** Podman also has a limitation where labels cannot be updated on existing containers. Labels can only be set during container creation.
+
+**What this means:**
+
+- ✅ You can create containers with Caddy labels
+- ❌ You cannot update labels on existing Podman containers
+- ❌ You cannot remove labels from existing Podman containers
+
+**Workaround for Podman:**
+
+The same workaround applies as with Docker - you need to recreate the container with the desired labels.
 
 ## API Endpoints
 
@@ -134,9 +140,9 @@ See [CADDY_GUIDE.md](CADDY_GUIDE.md) for detailed Caddy setup instructions.
 
 ## Troubleshooting
 
-### "Docker does not support updating labels on existing containers"
+### "Docker/Podman does not support updating labels on existing containers"
 
-This error appears when trying to update labels on a Docker container. This is a Docker limitation. You need to recreate the container with the desired labels. See the workaround section above.
+Both Docker and Podman have this limitation - labels cannot be updated on existing containers through their APIs. You need to recreate the container with the desired labels. See the workaround section above.
 
 ### Labels not appearing in Caddy
 

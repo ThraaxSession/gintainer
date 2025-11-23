@@ -744,45 +744,48 @@ func parseSize(sizeStr string) uint64 {
 }
 
 // SetContainerLabels sets or updates labels on a Podman container
+// Note: Podman does not support updating labels on existing containers.
+// Labels must be set at container creation time.
 func (p *PodmanRuntime) SetContainerLabels(ctx context.Context, containerID string, labels map[string]string) error {
 	logger.Debug("SetContainerLabels: Setting labels on Podman container", "id", containerID, "labels", labels)
 
-	// Build label arguments for podman container update command
-	args := []string{"container", "update"}
-	for key, value := range labels {
-		args = append(args, "--label-add", fmt.Sprintf("%s=%s", key, value))
-	}
-	args = append(args, containerID)
-
+	// Get container details for logging
+	args := []string{"container", "inspect", "--format", "{{.Name}}", containerID}
 	cmd := exec.CommandContext(ctx, "podman", args...)
 	output, err := cmd.CombinedOutput()
+	containerName := strings.TrimSpace(string(output))
 	if err != nil {
-		logger.Error("SetContainerLabels: Failed to update labels", "id", containerID, "error", err, "output", string(output))
-		return fmt.Errorf("failed to update labels: %w (output: %s)", err, string(output))
+		logger.Error("SetContainerLabels: Failed to inspect container", "id", containerID, "error", err)
+		containerName = containerID
 	}
 
-	logger.Info("SetContainerLabels: Successfully updated labels on container", "id", containerID)
-	return nil
+	logger.Warn("SetContainerLabels: Podman does not support updating labels on existing containers",
+		"id", containerID,
+		"container_name", containerName,
+		"note", "Labels must be set at container creation time")
+
+	return fmt.Errorf("Podman does not support updating labels on existing containers. Please recreate the container with the desired labels")
 }
 
 // RemoveContainerLabels removes labels from a Podman container
+// Note: Podman does not support updating labels on existing containers.
 func (p *PodmanRuntime) RemoveContainerLabels(ctx context.Context, containerID string, labelKeys []string) error {
 	logger.Debug("RemoveContainerLabels: Removing labels from Podman container", "id", containerID, "keys", labelKeys)
 
-	// Build label arguments for podman container update command
-	args := []string{"container", "update"}
-	for _, key := range labelKeys {
-		args = append(args, "--label-rm", key)
-	}
-	args = append(args, containerID)
-
+	// Get container details for logging
+	args := []string{"container", "inspect", "--format", "{{.Name}}", containerID}
 	cmd := exec.CommandContext(ctx, "podman", args...)
 	output, err := cmd.CombinedOutput()
+	containerName := strings.TrimSpace(string(output))
 	if err != nil {
-		logger.Error("RemoveContainerLabels: Failed to remove labels", "id", containerID, "error", err, "output", string(output))
-		return fmt.Errorf("failed to remove labels: %w (output: %s)", err, string(output))
+		logger.Error("RemoveContainerLabels: Failed to inspect container", "id", containerID, "error", err)
+		containerName = containerID
 	}
 
-	logger.Info("RemoveContainerLabels: Successfully removed labels from container", "id", containerID)
-	return nil
+	logger.Warn("RemoveContainerLabels: Podman does not support removing labels from existing containers",
+		"id", containerID,
+		"container_name", containerName,
+		"note", "Labels must be set at container creation time")
+
+	return fmt.Errorf("Podman does not support removing labels from existing containers. Please recreate the container without the labels")
 }

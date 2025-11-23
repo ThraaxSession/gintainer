@@ -435,7 +435,7 @@ labels:
   caddy.tls: "auto"                # Optional: TLS config (auto, off, or internal)
 ```
 
-**Note:** Docker has a limitation where labels cannot be updated on existing containers. Use Podman for dynamic label updates, or recreate Docker containers with the desired labels.
+**Note:** Both Docker and Podman have a limitation where labels cannot be updated on existing containers. Labels must be set at container creation time. To change labels, recreate the container with the desired labels.
 
 See [CADDY_LABELS_GUIDE.md](CADDY_LABELS_GUIDE.md) for detailed instructions on configuring Caddy labels through the web UI.
 
