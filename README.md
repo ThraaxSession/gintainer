@@ -120,14 +120,8 @@ If you see errors like `permission denied while trying to connect to the Docker 
 
 **Solution 1: Run with matching socket GID (Recommended)**
 ```bash
-# Find your Docker socket GID (if socket exists)
-if [ -e /var/run/docker.sock ]; then
-  DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
-  echo "Docker socket GID: $DOCKER_SOCK_GID"
-else
-  echo "Docker socket not found. Ensure Docker is running."
-  DOCKER_SOCK_GID=999  # Common default
-fi
+# Find your Docker socket GID (with fallback to 999 if not found)
+DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 999)
 
 # Run container with matching GID
 docker run -d \
@@ -138,7 +132,7 @@ docker run -d \
   gintainer
 
 # Or with docker-compose, add to the service:
-# user: "1000:999"  # Replace 999 with your socket GID from above
+# user: "1000:999"  # Replace 999 with your socket GID (run: stat -c '%g' /var/run/docker.sock)
 ```
 
 **Solution 2: Run as root (simpler but less secure)**
