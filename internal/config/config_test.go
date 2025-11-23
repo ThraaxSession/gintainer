@@ -13,14 +13,16 @@ func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
 	assert.NotNil(t, cfg)
-	assert.Equal(t, "8080", cfg.Server.Port)
-	assert.Equal(t, "debug", cfg.Server.Mode)
-	assert.Equal(t, false, cfg.Scheduler.Enabled)
+	assert.Equal(t, "10000", cfg.Server.Port)
+	assert.Equal(t, "release", cfg.Server.Mode)
+	assert.Equal(t, true, cfg.Scheduler.Enabled)
 	assert.Equal(t, "0 2 * * *", cfg.Scheduler.Schedule)
 	assert.True(t, cfg.Docker.Enabled)
 	assert.True(t, cfg.Podman.Enabled)
 	assert.Equal(t, "Gintainer", cfg.UI.Title)
 	assert.Equal(t, "light", cfg.UI.Theme)
+	assert.Equal(t, "A Golang application built with the Gin framework for managing containers and pods from both Docker and Podman.", cfg.UI.Description)
+	assert.Equal(t, "./compose-deployments", cfg.Deployment.BasePath)
 }
 
 func TestNewManager(t *testing.T) {

@@ -1,8 +1,8 @@
 server:
-    port: "8080"
-    mode: debug
+    port: "10000"
+    mode: release
 scheduler:
-    enabled: false
+    enabled: true
     schedule: 0 2 * * *
     filters: []
 docker:
@@ -18,5 +18,7 @@ caddy:
     reload_method: ""
 ui:
     title: Gintainer
-    description: ""
+    description: A Golang application built with the Gin framework for managing containers and pods from both Docker and Podman.
     theme: light
+deployment:
+    base_path: ./compose-deployments
