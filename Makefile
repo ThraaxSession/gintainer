@@ -32,7 +32,7 @@ fmt:
 
 # Run go vet
 vet:
-	go vet ./...
+	$(CGO_FLAGS) go vet $(BUILD_FLAGS) ./...
 
 # Tidy dependencies
 tidy:
