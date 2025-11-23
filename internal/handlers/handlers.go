@@ -16,6 +16,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	// DefaultCaddyPath is the default path for Caddy labels
+	DefaultCaddyPath = "/"
+	// DefaultCaddyTLS is the default TLS setting for Caddy labels
+	DefaultCaddyTLS = "auto"
+)
+
 // Handler manages HTTP handlers
 type Handler struct {
 	runtimeManager *runtime.Manager
@@ -675,13 +682,13 @@ func (h *Handler) UpdateContainerCaddyLabels(c *gin.Context) {
 	if req.Path != "" {
 		labels["caddy.path"] = req.Path
 	} else {
-		labels["caddy.path"] = "/"
+		labels["caddy.path"] = DefaultCaddyPath
 	}
 
 	if req.TLS != "" {
 		labels["caddy.tls"] = req.TLS
 	} else {
-		labels["caddy.tls"] = "auto"
+		labels["caddy.tls"] = DefaultCaddyTLS
 	}
 
 	if err := rt.SetContainerLabels(c.Request.Context(), containerID, labels); err != nil {
