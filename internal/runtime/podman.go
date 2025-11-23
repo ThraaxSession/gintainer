@@ -44,8 +44,12 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 	var connCtx context.Context
 	var lastErr error
 
+	// Use a background context - connection should be long-lived
+	// The context will be managed by the individual operations
+	baseCtx := context.Background()
+
 	for _, socketPath := range socketPaths {
-		ctx, err := bindings.NewConnection(context.Background(), socketPath)
+		ctx, err := bindings.NewConnection(baseCtx, socketPath)
 		if err == nil {
 			connCtx = ctx
 			break
@@ -59,7 +63,7 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 			return nil, fmt.Errorf("podman not found in PATH and unable to connect to Podman socket: %w", lastErr)
 		}
 		// If podman command exists, try default socket one more time
-		ctx, err := bindings.NewConnection(context.Background(), "unix:///run/podman/podman.sock")
+		ctx, err := bindings.NewConnection(baseCtx, "unix:///run/podman/podman.sock")
 		if err != nil {
 			return nil, fmt.Errorf("unable to connect to Podman socket: %w", err)
 		}
@@ -328,7 +332,6 @@ func (p *PodmanRuntime) BuildFromDockerfile(ctx context.Context, dockerfile, ima
 	// Set the context directory and output tag using the embedded buildahDefine.BuildOptions
 	buildOptions.ContextDirectory = tempDir
 	buildOptions.Output = imageName
-	buildOptions.AdditionalTags = []string{imageName}
 
 	_, err = images.Build(p.connCtx, []string{dockerfilePath}, buildOptions)
 	if err != nil {
@@ -440,7 +443,9 @@ func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContaine
 	// Start the container
 	if err := containers.Start(p.connCtx, createResp.ID, nil); err != nil {
 		// Try to remove the container if start fails
-		containers.Remove(p.connCtx, createResp.ID, new(containers.RemoveOptions).WithForce(true))
+		if _, removeErr := containers.Remove(p.connCtx, createResp.ID, new(containers.RemoveOptions).WithForce(true)); removeErr != nil {
+			logger.Warn("RunContainer: Failed to cleanup container after start failure", "containerID", createResp.ID, "error", removeErr)
+		}
 		return "", fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -573,12 +578,15 @@ func (p *PodmanRuntime) UpdateContainer(ctx context.Context, containerID string)
 
 // StreamLogs streams logs from a Podman container
 func (p *PodmanRuntime) StreamLogs(ctx context.Context, containerID string, follow bool, tail string) (io.ReadCloser, error) {
+	// Buffer size for log channels
+	const logChannelBufferSize = 100
+
 	// Create a pipe for the logs
 	pr, pw := io.Pipe()
 
 	// Create channels for stdout and stderr
-	stdoutChan := make(chan string, 100)
-	stderrChan := make(chan string, 100)
+	stdoutChan := make(chan string, logChannelBufferSize)
+	stderrChan := make(chan string, logChannelBufferSize)
 
 	// Prepare log options
 	logOpts := new(containers.LogOptions).WithFollow(follow).WithTimestamps(true)
