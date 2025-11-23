@@ -6,23 +6,24 @@ services:
         # Set to "true" to include Podman CLI (increases image size ~100MB)
         INSTALL_PODMAN: "false"
     container_name: gintainer
+    privileged: true
     ports:
-      - "8080:8080"
+      - "10000:8080"
     volumes:
       # Mount Docker socket for Docker container management
       - /var/run/docker.sock:/var/run/docker.sock
       # For Podman-only: Mount Podman socket to the same location
-      # - /run/podman/podman.sock:/var/run/docker.sock
+      - /run/podman/podman.sock:/run/podman/podman.sock
       # Mount custom configuration file (optional - remove if using default config)
-      # - ./gintainer.yaml:/app/gintainer.yaml
+      - ./gintainer.yaml:/app/gintainer.yaml
     # Set user to match the host's docker socket group
     # Option 1: Use specific GID that matches your docker socket (check with: stat -c '%g' /var/run/docker.sock)
     # user: "1000:999"  # Replace 999 with your docker socket GID
     # Option 2: Run as root (less secure but simpler)
-    # user: "0:0"
-    environment:
+    user: "0:0"
+    #environment:
       # Override default port if needed
-      - PORT=8080
+      #- PORT=8080
       # Override config path if needed
       # - CONFIG_PATH=/app/gintainer.yaml
       # Specify custom Podman socket path (optional)

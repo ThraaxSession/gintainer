@@ -16,8 +16,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN go build -ldflags="-s -w" -o gintainer ./cmd/gintainer
+# Build the application using make
+RUN make build
 
 # Runtime stage
 FROM alpine:latest

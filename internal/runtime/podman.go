@@ -116,6 +116,12 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 
 // ListContainers lists all Podman containers
 func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.FilterOptions) ([]models.ContainerInfo, error) {
+	logger.Debug("PodmanRuntime.ListContainers: Starting container list", 
+		"name_filter", filterOpts.Name, 
+		"status_filter", filterOpts.Status,
+		"include_stats", filterOpts.IncludeStats,
+		"include_privileged", filterOpts.IncludePrivileged)
+	
 	// Prepare list options
 	listOpts := new(containers.ListOptions).WithAll(true)
 
@@ -128,14 +134,20 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		filters["status"] = []string{filterOpts.Status}
 	}
 	if len(filters) > 0 {
+		logger.Debug("PodmanRuntime.ListContainers: Applying filters", "filters", filters)
 		listOpts.WithFilters(filters)
+	} else {
+		logger.Debug("PodmanRuntime.ListContainers: No filters applied, listing all containers")
 	}
 
 	// List containers using bindings
 	podmanContainers, err := containers.List(p.connCtx, listOpts)
 	if err != nil {
+		logger.Error("PodmanRuntime.ListContainers: Failed to list containers", "error", err)
 		return nil, fmt.Errorf("failed to list Podman containers: %w", err)
 	}
+
+	logger.Debug("PodmanRuntime.ListContainers: Retrieved containers from Podman API", "count", len(podmanContainers))
 
 	// Convert to common ContainerInfo format
 	containerInfos := make([]models.ContainerInfo, 0, len(podmanContainers))
@@ -223,6 +235,7 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		}
 	}
 
+	logger.Info("PodmanRuntime.ListContainers: Returning containers", "count", len(containerInfos))
 	return containerInfos, nil
 }
 
