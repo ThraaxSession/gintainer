@@ -28,6 +28,15 @@ func main() {
 
 	cfg := configManager.GetConfig()
 
+	// Set logger level based on config mode
+	if cfg.Server.Mode == "debug" {
+		logger.SetLevel(logger.DebugLevel)
+		logger.Info("Logger level set to DEBUG")
+	} else {
+		logger.SetLevel(logger.InfoLevel)
+		logger.Info("Logger level set to INFO")
+	}
+
 	// Set Gin mode from config
 	gin.SetMode(cfg.Server.Mode)
 

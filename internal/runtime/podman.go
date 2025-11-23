@@ -34,7 +34,7 @@ type PodmanRuntime struct {
 // NewPodmanRuntime creates a new Podman runtime using the Golang Bindings
 func NewPodmanRuntime() (*PodmanRuntime, error) {
 	logger.Debug("NewPodmanRuntime: Starting Podman runtime initialization")
-	
+
 	// Connect to Podman socket (unix socket by default)
 	// Try different socket locations
 	socketPaths := []string{
@@ -66,21 +66,21 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 	for i, socketPath := range socketPaths {
 		// Extract actual file path from unix:// prefix for stat check
 		filePath := strings.TrimPrefix(socketPath, "unix://")
-		
+
 		// Check if socket file exists and get permissions info
 		if fileInfo, err := os.Stat(filePath); err == nil {
-			logger.Debug("NewPodmanRuntime: Socket file found", 
-				"attempt", i+1, 
-				"socket", socketPath, 
+			logger.Debug("NewPodmanRuntime: Socket file found",
+				"attempt", i+1,
+				"socket", socketPath,
 				"mode", fileInfo.Mode().String(),
 				"size", fileInfo.Size())
 		} else {
-			logger.Debug("NewPodmanRuntime: Socket file not accessible", 
-				"attempt", i+1, 
-				"socket", socketPath, 
+			logger.Debug("NewPodmanRuntime: Socket file not accessible",
+				"attempt", i+1,
+				"socket", socketPath,
 				"error", err)
 		}
-		
+
 		logger.Debug("NewPodmanRuntime: Attempting connection", "attempt", i+1, "socket", socketPath)
 		ctx, err := bindings.NewConnection(baseCtx, socketPath)
 		if err == nil {
@@ -116,12 +116,12 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 
 // ListContainers lists all Podman containers
 func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.FilterOptions) ([]models.ContainerInfo, error) {
-	logger.Debug("PodmanRuntime.ListContainers: Starting container list", 
-		"name_filter", filterOpts.Name, 
+	logger.Debug("PodmanRuntime.ListContainers: Starting container list",
+		"name_filter", filterOpts.Name,
 		"status_filter", filterOpts.Status,
 		"include_stats", filterOpts.IncludeStats,
 		"include_privileged", filterOpts.IncludePrivileged)
-	
+
 	// Prepare list options
 	listOpts := new(containers.ListOptions).WithAll(true)
 
@@ -195,43 +195,64 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		if filterOpts.IncludeStats && containerInfos[i].State == "running" {
 			// Get stats for running containers using the stats command (bindings don't provide direct stats API in a simple way)
 			// We'll use the CLI approach for stats as the bindings Stats API is streaming-based
+			logger.Debug("PodmanRuntime.ListContainers: Getting stats for container", "id", containerInfos[i].ID, "name", containerInfos[i].Name)
 			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containerInfos[i].ID)
-			if statsOut, err := statsCmd.Output(); err == nil && len(statsOut) > 0 {
-				var podmanStats []struct {
-					ID            string `json:"id"`
-					Name          string `json:"name"`
-					CPUPercentage string `json:"cpu_percent"`
-					MemUsage      string `json:"mem_usage"`
-					MemPercentage string `json:"mem_percent"`
-					NetIO         string `json:"net_io"`
-					BlockIO       string `json:"block_io"`
-					PIDs          string `json:"pids"`
-				}
-				if err := json.Unmarshal(statsOut, &podmanStats); err == nil && len(podmanStats) > 0 {
-					// Parse CPU percentage (format: "0.50%")
-					cpuStr := strings.TrimSuffix(podmanStats[0].CPUPercentage, "%")
-					cpuPerc, _ := strconv.ParseFloat(cpuStr, 64)
-
-					// Parse memory usage (format: "100MB / 8GB")
-					memParts := strings.Split(podmanStats[0].MemUsage, " / ")
-					var memUsage, memLimit uint64
-					if len(memParts) == 2 {
-						memUsage = parseSize(strings.TrimSpace(memParts[0]))
-						memLimit = parseSize(strings.TrimSpace(memParts[1]))
-					}
-
-					// Parse memory percentage (format: "1.25%")
-					memPercStr := strings.TrimSuffix(podmanStats[0].MemPercentage, "%")
-					memPerc, _ := strconv.ParseFloat(memPercStr, 64)
-
-					containerInfos[i].Stats = &models.ContainerStats{
-						CPUPercent:    cpuPerc,
-						MemoryUsage:   memUsage,
-						MemoryLimit:   memLimit,
-						MemoryPercent: memPerc,
-					}
-				}
+			statsOut, err := statsCmd.Output()
+			if err != nil {
+				logger.Debug("PodmanRuntime.ListContainers: Failed to get stats via CLI", "id", containerInfos[i].ID, "error", err)
+				// Try to get stats using the bindings API as fallback
+				// Note: This requires the statsReport to be available but may work in some environments
+				continue
 			}
+
+			if len(statsOut) == 0 {
+				logger.Debug("PodmanRuntime.ListContainers: Empty stats output", "id", containerInfos[i].ID)
+				continue
+			}
+
+			var podmanStats []struct {
+				ID            string `json:"id"`
+				Name          string `json:"name"`
+				CPUPercentage string `json:"cpu_percent"`
+				MemUsage      string `json:"mem_usage"`
+				MemPercentage string `json:"mem_percent"`
+				NetIO         string `json:"net_io"`
+				BlockIO       string `json:"block_io"`
+				PIDs          string `json:"pids"`
+			}
+			if err := json.Unmarshal(statsOut, &podmanStats); err != nil {
+				logger.Debug("PodmanRuntime.ListContainers: Failed to unmarshal stats", "id", containerInfos[i].ID, "error", err)
+				continue
+			}
+
+			if len(podmanStats) == 0 {
+				logger.Debug("PodmanRuntime.ListContainers: No stats in response", "id", containerInfos[i].ID)
+				continue
+			}
+
+			// Parse CPU percentage (format: "0.50%")
+			cpuStr := strings.TrimSuffix(podmanStats[0].CPUPercentage, "%")
+			cpuPerc, _ := strconv.ParseFloat(cpuStr, 64)
+
+			// Parse memory usage (format: "100MB / 8GB")
+			memParts := strings.Split(podmanStats[0].MemUsage, " / ")
+			var memUsage, memLimit uint64
+			if len(memParts) == 2 {
+				memUsage = parseSize(strings.TrimSpace(memParts[0]))
+				memLimit = parseSize(strings.TrimSpace(memParts[1]))
+			}
+
+			// Parse memory percentage (format: "1.25%")
+			memPercStr := strings.TrimSuffix(podmanStats[0].MemPercentage, "%")
+			memPerc, _ := strconv.ParseFloat(memPercStr, 64)
+
+			containerInfos[i].Stats = &models.ContainerStats{
+				CPUPercent:    cpuPerc,
+				MemoryUsage:   memUsage,
+				MemoryLimit:   memLimit,
+				MemoryPercent: memPerc,
+			}
+			logger.Debug("PodmanRuntime.ListContainers: Stats retrieved", "id", containerInfos[i].ID, "cpu", cpuPerc, "mem_percent", memPerc)
 		}
 	}
 

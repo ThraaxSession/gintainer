@@ -17,6 +17,15 @@ var (
 	logBuffer   *RingBuffer
 )
 
+// Log level constants
+const (
+	DebugLevel = log.DebugLevel
+	InfoLevel  = log.InfoLevel
+	WarnLevel  = log.WarnLevel
+	ErrorLevel = log.ErrorLevel
+	FatalLevel = log.FatalLevel
+)
+
 // LogEntry represents a single log entry
 type LogEntry struct {
 	Timestamp time.Time

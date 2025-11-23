@@ -57,7 +57,7 @@ func (h *Handler) ListContainers(c *gin.Context) {
 		// Query all runtimes
 		runtimes := h.runtimeManager.GetAllRuntimes()
 		logger.Debug("ListContainers: Available runtimes", "count", len(runtimes))
-		
+
 		for name, rt := range runtimes {
 			logger.Debug("ListContainers: Querying runtime", "name", name)
 			containers, err := rt.ListContainers(c.Request.Context(), filters)
@@ -83,7 +83,7 @@ func (h *Handler) ListContainers(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 			return
 		}
-		
+
 		logger.Debug("ListContainers: Found runtime, listing containers")
 		containers, err := rt.ListContainers(c.Request.Context(), filters)
 		if err != nil {
