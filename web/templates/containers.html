@@ -286,11 +286,20 @@ function configureCaddy(id, name, rt) {
     currentCaddyContainerRuntime = rt;
     document.getElementById('caddyContainerName').textContent = name;
     
+    // Reset form and clear validation
+    const form = document.getElementById('caddyForm');
+    form.reset();
+    form.classList.remove('was-validated');
+    
+    // Set default values
+    document.getElementById('caddyPath').value = '/';
+    document.getElementById('caddyTLS').value = 'auto';
+    
     // Load existing Caddy labels
     fetch(`/api/containers?runtime=${rt}`)
         .then(r => r.json())
         .then(data => {
-            const container = data.containers.find(c => c.id === id);
+            const container = data.containers.find(c => c.id === id || c.id.startsWith(id) || id.startsWith(c.id));
             if (container && container.labels) {
                 document.getElementById('caddyDomain').value = container.labels['caddy.domain'] || '';
                 document.getElementById('caddyPort').value = container.labels['caddy.port'] || '';
