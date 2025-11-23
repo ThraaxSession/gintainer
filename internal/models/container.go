@@ -109,3 +109,16 @@ type CaddyfileUpdateRequest struct {
 	ContainerID string `json:"container_id"`
 	Content     string `json:"content"`
 }
+
+// UpdateLabelsRequest represents a request to update container labels
+type UpdateLabelsRequest struct {
+	Labels map[string]string `json:"labels" binding:"required"`
+}
+
+// CaddyLabelsRequest represents a request to update Caddy-specific labels
+type CaddyLabelsRequest struct {
+	Domain string `json:"domain" binding:"required"` // e.g., "example.com"
+	Port   string `json:"port" binding:"required"`   // e.g., "8080"
+	Path   string `json:"path"`                      // e.g., "/" (default)
+	TLS    string `json:"tls"`                       // e.g., "auto" (default)
+}

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ThraaxSession/gintainer/internal/caddy"
@@ -570,6 +571,189 @@ func (h *Handler) StreamLogs(c *gin.Context) {
 		}
 		return err == nil
 	})
+}
+
+// UpdateContainerLabels handles PUT /api/containers/:id/labels
+func (h *Handler) UpdateContainerLabels(c *gin.Context) {
+	containerID := c.Param("id")
+	runtimeName := c.Query("runtime")
+
+	logger.Info("UpdateContainerLabels: Request to update container labels", "id", containerID, "runtime", runtimeName)
+
+	if runtimeName == "" {
+		logger.Error("UpdateContainerLabels: Runtime parameter missing")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
+		return
+	}
+
+	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
+	if !ok {
+		logger.Error("UpdateContainerLabels: Invalid runtime", "runtime", runtimeName)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	var req models.UpdateLabelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("UpdateContainerLabels: Invalid request body", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := rt.SetContainerLabels(c.Request.Context(), containerID, req.Labels); err != nil {
+		logger.Error("UpdateContainerLabels: Failed to update labels", "id", containerID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	logger.Info("UpdateContainerLabels: Successfully updated container labels", "id", containerID)
+
+	// Update Caddy configuration if Caddy labels were changed
+	if h.caddyService != nil && h.caddyService.IsEnabled() {
+		hasCaddyLabels := false
+		for key := range req.Labels {
+			if strings.HasPrefix(key, "caddy.") {
+				hasCaddyLabels = true
+				break
+			}
+		}
+
+		if hasCaddyLabels {
+			// Get updated container info
+			containers, err := rt.ListContainers(c.Request.Context(), models.FilterOptions{})
+			if err == nil {
+				for _, container := range containers {
+					if container.ID == containerID {
+						if err := h.caddyService.GenerateCaddyfile(c.Request.Context(), container); err != nil {
+							logger.Warn("UpdateContainerLabels: Failed to update Caddyfile", "error", err)
+						} else {
+							logger.Info("UpdateContainerLabels: Updated Caddyfile for container", "id", containerID)
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "labels updated successfully"})
+}
+
+// UpdateContainerCaddyLabels handles PUT /api/containers/:id/caddy-labels
+func (h *Handler) UpdateContainerCaddyLabels(c *gin.Context) {
+	containerID := c.Param("id")
+	runtimeName := c.Query("runtime")
+
+	logger.Info("UpdateContainerCaddyLabels: Request to update Caddy labels", "id", containerID, "runtime", runtimeName)
+
+	if runtimeName == "" {
+		logger.Error("UpdateContainerCaddyLabels: Runtime parameter missing")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
+		return
+	}
+
+	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
+	if !ok {
+		logger.Error("UpdateContainerCaddyLabels: Invalid runtime", "runtime", runtimeName)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	var req models.CaddyLabelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("UpdateContainerCaddyLabels: Invalid request body", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Build Caddy labels map
+	labels := map[string]string{
+		"caddy.domain": req.Domain,
+		"caddy.port":   req.Port,
+	}
+
+	if req.Path != "" {
+		labels["caddy.path"] = req.Path
+	} else {
+		labels["caddy.path"] = "/"
+	}
+
+	if req.TLS != "" {
+		labels["caddy.tls"] = req.TLS
+	} else {
+		labels["caddy.tls"] = "auto"
+	}
+
+	if err := rt.SetContainerLabels(c.Request.Context(), containerID, labels); err != nil {
+		logger.Error("UpdateContainerCaddyLabels: Failed to update Caddy labels", "id", containerID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	logger.Info("UpdateContainerCaddyLabels: Successfully updated Caddy labels", "id", containerID)
+
+	// Update Caddy configuration
+	if h.caddyService != nil && h.caddyService.IsEnabled() {
+		// Get updated container info
+		containers, err := rt.ListContainers(c.Request.Context(), models.FilterOptions{})
+		if err == nil {
+			for _, container := range containers {
+				if container.ID == containerID {
+					if err := h.caddyService.GenerateCaddyfile(c.Request.Context(), container); err != nil {
+						logger.Warn("UpdateContainerCaddyLabels: Failed to generate Caddyfile", "error", err)
+					} else {
+						logger.Info("UpdateContainerCaddyLabels: Generated Caddyfile for container", "id", containerID)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Caddy labels updated successfully", "labels": labels})
+}
+
+// DeleteContainerCaddyLabels handles DELETE /api/containers/:id/caddy-labels
+func (h *Handler) DeleteContainerCaddyLabels(c *gin.Context) {
+	containerID := c.Param("id")
+	runtimeName := c.Query("runtime")
+
+	logger.Info("DeleteContainerCaddyLabels: Request to delete Caddy labels", "id", containerID, "runtime", runtimeName)
+
+	if runtimeName == "" {
+		logger.Error("DeleteContainerCaddyLabels: Runtime parameter missing")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "runtime parameter is required"})
+		return
+	}
+
+	rt, ok := h.runtimeManager.GetRuntime(runtimeName)
+	if !ok {
+		logger.Error("DeleteContainerCaddyLabels: Invalid runtime", "runtime", runtimeName)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
+		return
+	}
+
+	// Remove all Caddy labels
+	labelKeys := []string{"caddy.domain", "caddy.port", "caddy.path", "caddy.tls"}
+
+	if err := rt.RemoveContainerLabels(c.Request.Context(), containerID, labelKeys); err != nil {
+		logger.Error("DeleteContainerCaddyLabels: Failed to remove Caddy labels", "id", containerID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	logger.Info("DeleteContainerCaddyLabels: Successfully removed Caddy labels", "id", containerID)
+
+	// Remove Caddy configuration
+	if h.caddyService != nil && h.caddyService.IsEnabled() {
+		if err := h.caddyService.DeleteCaddyfile(c.Request.Context(), containerID); err != nil {
+			logger.Warn("DeleteContainerCaddyLabels: Failed to delete Caddyfile", "error", err)
+		} else {
+			logger.Info("DeleteContainerCaddyLabels: Removed Caddyfile for container", "id", containerID)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Caddy labels deleted successfully"})
 }
 
 // HealthCheck handles GET /health

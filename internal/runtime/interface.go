@@ -58,6 +58,12 @@ type ContainerRuntime interface {
 	// StreamLogs streams logs from a container
 	StreamLogs(ctx context.Context, containerID string, follow bool, tail string) (io.ReadCloser, error)
 
+	// SetContainerLabels sets or updates labels on a container
+	SetContainerLabels(ctx context.Context, containerID string, labels map[string]string) error
+
+	// RemoveContainerLabels removes labels from a container
+	RemoveContainerLabels(ctx context.Context, containerID string, labelKeys []string) error
+
 	// GetRuntimeName returns the name of the runtime ("docker" or "podman")
 	GetRuntimeName() string
 }

@@ -742,3 +742,47 @@ func parseSize(sizeStr string) uint64 {
 
 	return uint64(val * float64(multiplier))
 }
+
+// SetContainerLabels sets or updates labels on a Podman container
+func (p *PodmanRuntime) SetContainerLabels(ctx context.Context, containerID string, labels map[string]string) error {
+	logger.Debug("SetContainerLabels: Setting labels on Podman container", "id", containerID, "labels", labels)
+
+	// Build label arguments for podman container update command
+	args := []string{"container", "update"}
+	for key, value := range labels {
+		args = append(args, "--label-add", fmt.Sprintf("%s=%s", key, value))
+	}
+	args = append(args, containerID)
+
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Error("SetContainerLabels: Failed to update labels", "id", containerID, "error", err, "output", string(output))
+		return fmt.Errorf("failed to update labels: %w (output: %s)", err, string(output))
+	}
+
+	logger.Info("SetContainerLabels: Successfully updated labels on container", "id", containerID)
+	return nil
+}
+
+// RemoveContainerLabels removes labels from a Podman container
+func (p *PodmanRuntime) RemoveContainerLabels(ctx context.Context, containerID string, labelKeys []string) error {
+	logger.Debug("RemoveContainerLabels: Removing labels from Podman container", "id", containerID, "keys", labelKeys)
+
+	// Build label arguments for podman container update command
+	args := []string{"container", "update"}
+	for _, key := range labelKeys {
+		args = append(args, "--label-rm", key)
+	}
+	args = append(args, containerID)
+
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Error("RemoveContainerLabels: Failed to remove labels", "id", containerID, "error", err, "output", string(output))
+		return fmt.Errorf("failed to remove labels: %w (output: %s)", err, string(output))
+	}
+
+	logger.Info("RemoveContainerLabels: Successfully removed labels from container", "id", containerID)
+	return nil
+}
