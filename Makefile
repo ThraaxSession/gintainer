@@ -1,16 +1,21 @@
 .PHONY: build run clean test fmt vet help
 
+# Build flags for Podman bindings
+BUILD_TAGS := containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper
+BUILD_FLAGS := -tags "$(BUILD_TAGS)"
+CGO_FLAGS := CGO_ENABLED=0
+
 # Build the application
 build:
-	go build -o gintainer ./cmd/gintainer
+	$(CGO_FLAGS) go build $(BUILD_FLAGS) -o gintainer ./cmd/gintainer
 
 # Build for production (optimized)
 build-prod:
-	go build -ldflags="-s -w" -o gintainer ./cmd/gintainer
+	$(CGO_FLAGS) go build $(BUILD_FLAGS) -ldflags="-s -w" -o gintainer ./cmd/gintainer
 
 # Run the application
 run:
-	go run ./cmd/gintainer
+	$(CGO_FLAGS) go run $(BUILD_FLAGS) ./cmd/gintainer
 
 # Clean build artifacts
 clean:
@@ -19,7 +24,7 @@ clean:
 
 # Run tests
 test:
-	go test -v ./...
+	$(CGO_FLAGS) go test $(BUILD_FLAGS) -v ./...
 
 # Format code
 fmt:
@@ -27,7 +32,7 @@ fmt:
 
 # Run go vet
 vet:
-	go vet ./...
+	$(CGO_FLAGS) go vet $(BUILD_FLAGS) ./...
 
 # Tidy dependencies
 tidy:
