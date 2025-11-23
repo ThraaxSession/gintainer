@@ -39,6 +39,16 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 		"unix:///run/podman/podman.sock",
 		"unix:///var/run/podman/podman.sock",
 		fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid()),
+		"unix:///var/run/docker.sock", // For containerized environments where Podman socket is mounted here
+	}
+
+	// Check if custom socket path is specified via environment variable
+	if customSocket := os.Getenv("PODMAN_SOCKET"); customSocket != "" {
+		// Prepend custom socket to try it first
+		if !strings.HasPrefix(customSocket, "unix://") {
+			customSocket = "unix://" + customSocket
+		}
+		socketPaths = append([]string{customSocket}, socketPaths...)
 	}
 
 	var connCtx context.Context
@@ -52,6 +62,7 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 		ctx, err := bindings.NewConnection(baseCtx, socketPath)
 		if err == nil {
 			connCtx = ctx
+			logger.Printf("Podman runtime connected via socket: %s", socketPath)
 			break
 		}
 		lastErr = err

@@ -62,8 +62,7 @@ docker run -d \
   gintainer
 
 # Or run with Podman socket mounted (for Podman management)
-# Note: Podman socket is mounted to the standard Docker socket path
-# because Gintainer uses the Docker API which Podman also supports
+# Note: Podman socket is mounted to /var/run/docker.sock for API compatibility
 podman run -d \
   -p 8080:8080 \
   -v /run/podman/podman.sock:/var/run/docker.sock \
@@ -71,11 +70,12 @@ podman run -d \
   --name gintainer \
   gintainer
 
-# For both Docker and Podman access, mount both sockets
+# For both Docker and Podman access (not recommended - conflicts may occur)
+# It's better to run one instance per runtime or use separate socket paths
+# If you must use both, Podman socket will be auto-detected at /var/run/docker.sock
 docker run -d \
   -p 8080:8080 \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /run/podman/podman.sock:/run/podman/podman.sock \
   -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
   --name gintainer \
   gintainer
@@ -84,15 +84,17 @@ docker run -d \
 **Important Notes:**
 - **Socket Mounting**: The Docker/Podman socket must be mounted into the container for Gintainer to manage containers.
   - Docker socket: `/var/run/docker.sock` (both host and container)
-  - Podman socket: `/run/podman/podman.sock` (host) → `/var/run/docker.sock` (container)
-  - Podman's socket is mounted to the Docker socket path because Podman is Docker-API compatible.
+  - **Podman socket for API access**: `/run/podman/podman.sock` (host) → `/var/run/docker.sock` (container)
+    - Podman's socket is mounted to the Docker socket path for API compatibility
+    - Alternatively, set `PODMAN_SOCKET=/var/run/docker.sock` environment variable
+  - **Both Docker and Podman**: Mount Podman socket to `/var/run/docker.sock` as the Podman runtime will auto-detect it there
 - **Socket Permissions**: The container user needs access to the Docker/Podman socket. Solutions:
   - **Option 1 (Recommended)**: Run with matching GID: `docker run --user "1000:$(stat -c '%g' /var/run/docker.sock)" ...`
   - **Option 2**: Run as root: `docker run --user "0:0" ...` (less secure)
   - **Option 3**: Change socket permissions on host: `sudo chmod 666 /var/run/docker.sock` (not recommended for production)
 - **Configuration**: The default `gintainer.yaml` is included in the image. Mount your own configuration file to customize settings.
 - **Podman CLI**: Optional. Build with `--build-arg INSTALL_PODMAN=true` to include Podman CLI (adds ~100MB to image size).
-- **Environment Variables**: You can override settings using environment variables (e.g., `PORT`, `CONFIG_PATH`).
+- **Environment Variables**: You can override settings using environment variables (e.g., `PORT`, `CONFIG_PATH`, `PODMAN_SOCKET`).
 
 
 ### Option 2: Build from Source
@@ -174,6 +176,44 @@ podman run -d \
 ```
 
 **Note**: Installing Podman increases the image size significantly (~100MB). Only enable it if you need Podman container management.
+
+### Invalid Runtime "podman"
+
+If you see `Invalid runtime specified: podman` error, it means the Podman runtime failed to initialize. Common causes:
+
+**1. Podman socket not accessible**
+- Ensure the Podman socket is mounted to a location the container can access
+- The Podman runtime checks these locations in order:
+  - `PODMAN_SOCKET` environment variable (if set)
+  - `/run/podman/podman.sock`
+  - `/var/run/podman/podman.sock`
+  - `/run/user/<uid>/podman/podman.sock`
+  - `/var/run/docker.sock` (for containerized environments)
+
+**2. Solution: Mount Podman socket correctly**
+```bash
+# Option 1: Mount to /var/run/docker.sock (recommended for containers)
+docker run -d \
+  -p 8080:8080 \
+  -v /run/podman/podman.sock:/var/run/docker.sock \
+  --user "1000:$(stat -c '%g' /run/podman/podman.sock 2>/dev/null || echo '0')" \
+  --name gintainer \
+  gintainer
+
+# Option 2: Use PODMAN_SOCKET environment variable
+docker run -d \
+  -p 8080:8080 \
+  -v /run/podman/podman.sock:/run/podman/podman.sock \
+  -e PODMAN_SOCKET=/run/podman/podman.sock \
+  --user "1000:$(stat -c '%g' /run/podman/podman.sock 2>/dev/null || echo '0')" \
+  --name gintainer \
+  gintainer
+```
+
+**3. Check logs for initialization errors**
+```bash
+docker logs gintainer | grep -i podman
+```
 
 ## Usage
 

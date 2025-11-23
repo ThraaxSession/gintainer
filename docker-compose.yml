@@ -11,8 +11,8 @@ services:
     volumes:
       # Mount Docker socket for Docker container management
       - /var/run/docker.sock:/var/run/docker.sock
-      # Mount Podman socket for Podman container management (optional)
-      # - /run/podman/podman.sock:/run/podman/podman.sock
+      # For Podman-only: Mount Podman socket to the same location
+      # - /run/podman/podman.sock:/var/run/docker.sock
       # Mount custom configuration file (optional - remove if using default config)
       # - ./gintainer.yaml:/app/gintainer.yaml
     # Set user to match the host's docker socket group
@@ -25,4 +25,6 @@ services:
       - PORT=8080
       # Override config path if needed
       # - CONFIG_PATH=/app/gintainer.yaml
+      # Specify custom Podman socket path (optional)
+      # - PODMAN_SOCKET=/var/run/docker.sock
     restart: unless-stopped
