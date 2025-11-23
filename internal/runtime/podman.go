@@ -33,6 +33,8 @@ type PodmanRuntime struct {
 
 // NewPodmanRuntime creates a new Podman runtime using the Golang Bindings
 func NewPodmanRuntime() (*PodmanRuntime, error) {
+	logger.Debug("NewPodmanRuntime: Starting Podman runtime initialization")
+	
 	// Connect to Podman socket (unix socket by default)
 	// Try different socket locations
 	socketPaths := []string{
@@ -44,12 +46,15 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 
 	// Check if custom socket path is specified via environment variable
 	if customSocket := os.Getenv("PODMAN_SOCKET"); customSocket != "" {
+		logger.Debug("NewPodmanRuntime: Custom socket path specified via PODMAN_SOCKET", "socket", customSocket)
 		// Prepend custom socket to try it first
 		if !strings.HasPrefix(customSocket, "unix://") {
 			customSocket = "unix://" + customSocket
 		}
 		socketPaths = append([]string{customSocket}, socketPaths...)
 	}
+
+	logger.Debug("NewPodmanRuntime: Will attempt to connect to sockets", "paths", socketPaths)
 
 	var connCtx context.Context
 	var lastErr error
@@ -58,29 +63,54 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 	// The context will be managed by the individual operations
 	baseCtx := context.Background()
 
-	for _, socketPath := range socketPaths {
+	for i, socketPath := range socketPaths {
+		// Extract actual file path from unix:// prefix for stat check
+		filePath := strings.TrimPrefix(socketPath, "unix://")
+		
+		// Check if socket file exists and get permissions info
+		if fileInfo, err := os.Stat(filePath); err == nil {
+			logger.Debug("NewPodmanRuntime: Socket file found", 
+				"attempt", i+1, 
+				"socket", socketPath, 
+				"mode", fileInfo.Mode().String(),
+				"size", fileInfo.Size())
+		} else {
+			logger.Debug("NewPodmanRuntime: Socket file not accessible", 
+				"attempt", i+1, 
+				"socket", socketPath, 
+				"error", err)
+		}
+		
+		logger.Debug("NewPodmanRuntime: Attempting connection", "attempt", i+1, "socket", socketPath)
 		ctx, err := bindings.NewConnection(baseCtx, socketPath)
 		if err == nil {
 			connCtx = ctx
-			logger.Printf("Podman runtime connected via socket: %s", socketPath)
+			logger.Info("NewPodmanRuntime: Successfully connected to Podman socket", "socket", socketPath)
 			break
 		}
+		logger.Debug("NewPodmanRuntime: Failed to connect", "socket", socketPath, "error", err)
 		lastErr = err
 	}
 
 	if connCtx == nil {
+		logger.Debug("NewPodmanRuntime: All socket connections failed, checking for podman CLI")
 		// Fallback: try to check if podman command is available
 		if _, err := exec.LookPath("podman"); err != nil {
+			logger.Error("NewPodmanRuntime: Podman CLI not found in PATH", "error", err)
 			return nil, fmt.Errorf("podman not found in PATH and unable to connect to Podman socket: %w", lastErr)
 		}
+		logger.Debug("NewPodmanRuntime: Podman CLI found, retrying default socket")
 		// If podman command exists, try default socket one more time
 		ctx, err := bindings.NewConnection(baseCtx, "unix:///run/podman/podman.sock")
 		if err != nil {
+			logger.Error("NewPodmanRuntime: Final connection attempt failed", "error", err)
 			return nil, fmt.Errorf("unable to connect to Podman socket: %w", err)
 		}
 		connCtx = ctx
+		logger.Info("NewPodmanRuntime: Connected to default socket after finding Podman CLI")
 	}
 
+	logger.Info("NewPodmanRuntime: Podman runtime initialized successfully")
 	return &PodmanRuntime{connCtx: connCtx}, nil
 }
 
