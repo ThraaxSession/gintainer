@@ -22,8 +22,13 @@ RUN go build -ldflags="-s -w" -o gintainer ./cmd/gintainer
 # Runtime stage
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS connections and podman for Podman support
-RUN apk add --no-cache ca-certificates podman
+# Install ca-certificates for HTTPS connections
+# Note: Podman CLI can be optionally installed with: --build-arg INSTALL_PODMAN=true
+ARG INSTALL_PODMAN=false
+RUN apk add --no-cache ca-certificates && \
+    if [ "$INSTALL_PODMAN" = "true" ]; then \
+        apk add --no-cache podman; \
+    fi
 
 # Create a non-root user and add to root group for Docker socket access
 # Note: The root group (GID 0) typically has access to /var/run/docker.sock

@@ -39,6 +39,16 @@ docker-compose down
 
 #### Using Docker CLI
 
+**Build Options:**
+```bash
+# Build for Docker-only management (smaller image)
+docker build -t gintainer .
+
+# Build with Podman CLI support (larger image, needed for Podman management)
+docker build --build-arg INSTALL_PODMAN=true -t gintainer .
+```
+
+**Run Examples:**
 ```bash
 # Build the Docker image
 docker build -t gintainer .
@@ -72,17 +82,18 @@ docker run -d \
 ```
 
 **Important Notes:**
-- **Socket Mounting**: The Docker/Podman socket must be mounted into the container for Gintainer to manage containers
+- **Socket Mounting**: The Docker/Podman socket must be mounted into the container for Gintainer to manage containers.
   - Docker socket: `/var/run/docker.sock` (both host and container)
   - Podman socket: `/run/podman/podman.sock` (host) → `/var/run/docker.sock` (container)
-  - Podman's socket is mounted to the Docker socket path because Podman is Docker-API compatible
+  - Podman's socket is mounted to the Docker socket path because Podman is Docker-API compatible.
 - **Socket Permissions**: The container user needs access to the Docker/Podman socket. Solutions:
   - **Option 1 (Recommended)**: Run with matching GID: `docker run --user "1000:$(stat -c '%g' /var/run/docker.sock)" ...`
   - **Option 2**: Run as root: `docker run --user "0:0" ...` (less secure)
   - **Option 3**: Change socket permissions on host: `sudo chmod 666 /var/run/docker.sock` (not recommended for production)
-- **Configuration**: The default `gintainer.yaml` is included in the image. Mount your own configuration file to customize settings
-- **Podman CLI**: The Podman CLI is included in the container image for Podman management
-- **Environment Variables**: You can override settings using environment variables (e.g., `PORT`, `CONFIG_PATH`)
+- **Configuration**: The default `gintainer.yaml` is included in the image. Mount your own configuration file to customize settings.
+- **Podman CLI**: Optional. Build with `--build-arg INSTALL_PODMAN=true` to include Podman CLI (adds ~100MB to image size).
+- **Environment Variables**: You can override settings using environment variables (e.g., `PORT`, `CONFIG_PATH`).
+
 
 ### Option 2: Build from Source
 
@@ -109,8 +120,14 @@ If you see errors like `permission denied while trying to connect to the Docker 
 
 **Solution 1: Run with matching socket GID (Recommended)**
 ```bash
-# Find your Docker socket GID
-DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
+# Find your Docker socket GID (if socket exists)
+if [ -e /var/run/docker.sock ]; then
+  DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
+  echo "Docker socket GID: $DOCKER_SOCK_GID"
+else
+  echo "Docker socket not found. Ensure Docker is running."
+  DOCKER_SOCK_GID=999  # Common default
+fi
 
 # Run container with matching GID
 docker run -d \
@@ -121,7 +138,7 @@ docker run -d \
   gintainer
 
 # Or with docker-compose, add to the service:
-# user: "1000:999"  # Replace 999 with your socket GID
+# user: "1000:999"  # Replace 999 with your socket GID from above
 ```
 
 **Solution 2: Run as root (simpler but less secure)**
@@ -141,17 +158,28 @@ sudo chmod 666 /var/run/docker.sock
 
 ### Podman Not Found
 
-If using Podman to run the container and you see `podman not found in PATH`, the Podman CLI is included in the image but requires proper socket mounting:
+If you see `podman not found in PATH` when managing Podman containers, you need to rebuild the image with Podman CLI support:
 
 ```bash
-# For Podman socket support
+# Rebuild with Podman CLI included
+docker build --build-arg INSTALL_PODMAN=true -t gintainer .
+
+# Or with docker-compose, add to the build section:
+# build:
+#   context: .
+#   args:
+#     INSTALL_PODMAN: "true"
+
+# Then run with Podman socket mounted
 podman run -d \
   -p 8080:8080 \
   -v /run/podman/podman.sock:/var/run/docker.sock \
-  --user "1000:$(stat -c '%g' /run/podman/podman.sock)" \
+  --user "1000:$(stat -c '%g' /run/podman/podman.sock 2>/dev/null || echo '0')" \
   --name gintainer \
   gintainer
 ```
+
+**Note**: Installing Podman increases the image size significantly (~100MB). Only enable it if you need Podman container management.
 
 ## Usage
 

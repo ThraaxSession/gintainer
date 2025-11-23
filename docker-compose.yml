@@ -1,6 +1,10 @@
 services:
   gintainer:
-    build: .
+    build:
+      context: .
+      args:
+        # Set to "true" to include Podman CLI (increases image size ~100MB)
+        INSTALL_PODMAN: "false"
     container_name: gintainer
     ports:
       - "8080:8080"
