@@ -70,15 +70,20 @@ podman run -d \
   --name gintainer \
   gintainer
 
-# For both Docker and Podman access (not recommended - conflicts may occur)
-# It's better to run one instance per runtime or use separate socket paths
-# If you must use both, Podman socket will be auto-detected at /var/run/docker.sock
+# For Docker-only access
+# This is the standard configuration that will work with Docker daemon
 docker run -d \
   -p 8080:8080 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v $(pwd)/gintainer.yaml:/app/gintainer.yaml \
   --name gintainer \
   gintainer
+```
+
+**Note on running both Docker and Podman**: You can only mount one socket to `/var/run/docker.sock` at a time. If you need to manage both Docker and Podman containers:
+- Run separate Gintainer instances, each with its own socket, or
+- Use Docker for the Docker socket and ensure Podman socket is accessible at one of the standard paths that Gintainer checks (`/run/podman/podman.sock`, `/var/run/podman/podman.sock`, or set via `PODMAN_SOCKET` environment variable)
+
 ```
 
 **Important Notes:**
