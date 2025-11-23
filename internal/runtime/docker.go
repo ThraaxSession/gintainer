@@ -542,7 +542,7 @@ func (d *DockerRuntime) SetContainerLabels(ctx context.Context, containerID stri
 	// For Docker, labels cannot be updated on running containers using the standard API.
 	// We need to stop the container, update its config, and restart it.
 	// However, a simpler approach is to return an informative error and suggest recreation.
-	
+
 	// Note: In a production system, you might want to:
 	// 1. Stop the container
 	// 2. Commit it to a new image with updated labels
@@ -550,11 +550,11 @@ func (d *DockerRuntime) SetContainerLabels(ctx context.Context, containerID stri
 	// 4. Create a new container from the new image
 	// But this is complex and risky, so we'll document this limitation.
 
-	logger.Warn("SetContainerLabels: Docker does not support updating labels on existing containers", 
-		"id", containerID, 
+	logger.Warn("SetContainerLabels: Docker does not support updating labels on existing containers",
+		"id", containerID,
 		"container_name", containerJSON.Name,
 		"note", "Labels must be set at container creation time")
-	
+
 	return fmt.Errorf("Docker does not support updating labels on existing containers. Please recreate the container with the desired labels")
 }
 
@@ -570,11 +570,11 @@ func (d *DockerRuntime) RemoveContainerLabels(ctx context.Context, containerID s
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
 
-	logger.Warn("RemoveContainerLabels: Docker does not support removing labels from existing containers", 
-		"id", containerID, 
+	logger.Warn("RemoveContainerLabels: Docker does not support removing labels from existing containers",
+		"id", containerID,
 		"container_name", containerJSON.Name,
 		"note", "Labels must be set at container creation time")
-	
+
 	return fmt.Errorf("Docker does not support removing labels from existing containers. Please recreate the container without the labels")
 }
 
