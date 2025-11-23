@@ -58,15 +58,15 @@ func (h *Handler) ListContainers(c *gin.Context) {
 		runtimes := h.runtimeManager.GetAllRuntimes()
 		logger.Debug("ListContainers: Available runtimes", "count", len(runtimes))
 		
-		for i, rt := range runtimes {
-			logger.Debug("ListContainers: Querying runtime", "index", i)
+		for name, rt := range runtimes {
+			logger.Debug("ListContainers: Querying runtime", "name", name)
 			containers, err := rt.ListContainers(c.Request.Context(), filters)
 			if err != nil {
 				// Log error but continue with other runtimes
-				logger.Warn("ListContainers: Error querying runtime", "index", i, "error", err)
+				logger.Warn("ListContainers: Error querying runtime", "name", name, "error", err)
 				continue
 			}
-			logger.Debug("ListContainers: Runtime returned containers", "index", i, "count", len(containers))
+			logger.Debug("ListContainers: Runtime returned containers", "name", name, "count", len(containers))
 			allContainers = append(allContainers, containers...)
 		}
 	} else {
@@ -74,14 +74,12 @@ func (h *Handler) ListContainers(c *gin.Context) {
 		// Query specific runtime
 		rt, ok := h.runtimeManager.GetRuntime(filters.Runtime)
 		if !ok {
-			logger.Error("ListContainers: Invalid runtime specified", "runtime", filters.Runtime)
-			// Get list of available runtimes for debugging
-			availableRuntimes := []string{}
-			for _, r := range h.runtimeManager.GetAllRuntimes() {
-				// We can't get the name directly, but we can log that they exist
-				availableRuntimes = append(availableRuntimes, "runtime")
+			// Get list of available runtime names
+			availableNames := []string{}
+			for name := range h.runtimeManager.GetAllRuntimes() {
+				availableNames = append(availableNames, name)
 			}
-			logger.Debug("ListContainers: Available runtime count", "count", len(availableRuntimes))
+			logger.Error("ListContainers: Invalid runtime specified", "runtime", filters.Runtime, "available", availableNames)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 			return
 		}
