@@ -15,77 +15,97 @@ import (
 
 	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/ThraaxSession/gintainer/internal/models"
+	"github.com/containers/podman/v5/pkg/bindings"
+	"github.com/containers/podman/v5/pkg/bindings/containers"
+	"github.com/containers/podman/v5/pkg/bindings/images"
+	"github.com/containers/podman/v5/pkg/bindings/pods"
+	"github.com/containers/podman/v5/pkg/domain/entities/types"
+	"github.com/containers/podman/v5/pkg/specgen"
+	nettypes "go.podman.io/common/libnetwork/types"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"gopkg.in/yaml.v3"
 )
 
-// PodmanRuntime implements ContainerRuntime for Podman
+// PodmanRuntime implements ContainerRuntime for Podman using Golang Bindings
 type PodmanRuntime struct {
-	// Using CLI approach for simplicity and reliability
+	connCtx context.Context
 }
 
-// NewPodmanRuntime creates a new Podman runtime
+// NewPodmanRuntime creates a new Podman runtime using the Golang Bindings
 func NewPodmanRuntime() (*PodmanRuntime, error) {
-	// Check if podman is available
-	if _, err := exec.LookPath("podman"); err != nil {
-		return nil, fmt.Errorf("podman not found in PATH: %w", err)
+	// Connect to Podman socket (unix socket by default)
+	// Try different socket locations
+	socketPaths := []string{
+		"unix:///run/podman/podman.sock",
+		"unix:///var/run/podman/podman.sock",
+		fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid()),
 	}
-	return &PodmanRuntime{}, nil
+
+	var connCtx context.Context
+	var lastErr error
+
+	for _, socketPath := range socketPaths {
+		ctx, err := bindings.NewConnection(context.Background(), socketPath)
+		if err == nil {
+			connCtx = ctx
+			break
+		}
+		lastErr = err
+	}
+
+	if connCtx == nil {
+		// Fallback: try to check if podman command is available
+		if _, err := exec.LookPath("podman"); err != nil {
+			return nil, fmt.Errorf("podman not found in PATH and unable to connect to Podman socket: %w", lastErr)
+		}
+		// If podman command exists, try default socket one more time
+		ctx, err := bindings.NewConnection(context.Background(), "unix:///run/podman/podman.sock")
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect to Podman socket: %w", err)
+		}
+		connCtx = ctx
+	}
+
+	return &PodmanRuntime{connCtx: connCtx}, nil
 }
 
 // ListContainers lists all Podman containers
 func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.FilterOptions) ([]models.ContainerInfo, error) {
-	args := []string{"ps", "-a", "--format", "json"}
+	// Prepare list options
+	listOpts := new(containers.ListOptions).WithAll(true)
 
+	// Apply filters
+	filters := make(map[string][]string)
 	if filterOpts.Name != "" {
-		args = append(args, "--filter", fmt.Sprintf("name=%s", filterOpts.Name))
+		filters["name"] = []string{filterOpts.Name}
 	}
 	if filterOpts.Status != "" {
-		args = append(args, "--filter", fmt.Sprintf("status=%s", filterOpts.Status))
+		filters["status"] = []string{filterOpts.Status}
+	}
+	if len(filters) > 0 {
+		listOpts.WithFilters(filters)
 	}
 
-	cmd := exec.CommandContext(ctx, "podman", args...)
-	output, err := cmd.Output()
+	// List containers using bindings
+	podmanContainers, err := containers.List(p.connCtx, listOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Podman containers: %w", err)
 	}
 
-	// Parse JSON output from podman
-	var podmanContainers []struct {
-		ID      string            `json:"Id"`
-		Names   []string          `json:"Names"`
-		Image   string            `json:"Image"`
-		Status  string            `json:"Status"`
-		State   string            `json:"State"`
-		Created int64             `json:"Created"`
-		Labels  map[string]string `json:"Labels"`
-		Ports   []struct {
-			HostPort      json.Number `json:"host_port"`
-			ContainerPort json.Number `json:"container_port"`
-			Protocol      string      `json:"protocol"`
-		} `json:"Ports"`
-	}
-
-	if len(output) > 0 {
-		if err := json.Unmarshal(output, &podmanContainers); err != nil {
-			return nil, fmt.Errorf("failed to parse podman output: %w", err)
-		}
-	}
-
 	// Convert to common ContainerInfo format
-	containers := make([]models.ContainerInfo, 0, len(podmanContainers))
+	containerInfos := make([]models.ContainerInfo, 0, len(podmanContainers))
 	for _, pc := range podmanContainers {
 		name := ""
 		if len(pc.Names) > 0 {
 			name = pc.Names[0]
 		}
 
+		// Convert ports
 		ports := make([]models.PortMapping, 0, len(pc.Ports))
 		for _, p := range pc.Ports {
-			hostPort, _ := p.HostPort.Int64()
-			containerPort, _ := p.ContainerPort.Int64()
 			ports = append(ports, models.PortMapping{
-				ContainerPort: int(containerPort),
-				HostPort:      int(hostPort),
+				ContainerPort: int(p.ContainerPort),
+				HostPort:      int(p.HostPort),
 				Protocol:      p.Protocol,
 			})
 		}
@@ -97,27 +117,28 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 			Status:  pc.Status,
 			State:   pc.State,
 			Runtime: "podman",
-			Created: time.Unix(pc.Created, 0),
+			Created: pc.Created,
 			Labels:  pc.Labels,
 			Ports:   ports,
 		}
 
-		containers = append(containers, containerInfo)
+		containerInfos = append(containerInfos, containerInfo)
 	}
 
 	// Add privileged and stats support if requested
-	for i := range containers {
+	for i := range containerInfos {
 		if filterOpts.IncludePrivileged {
-			// Check if container is privileged using podman inspect
-			inspectCmd := exec.CommandContext(ctx, "podman", "inspect", "--format", "{{.HostConfig.Privileged}}", containers[i].ID)
-			if out, err := inspectCmd.Output(); err == nil {
-				containers[i].Privileged = strings.TrimSpace(string(out)) == "true"
+			// Inspect container to check if it's privileged
+			inspectData, err := containers.Inspect(p.connCtx, containerInfos[i].ID, new(containers.InspectOptions).WithSize(false))
+			if err == nil && inspectData.HostConfig != nil {
+				containerInfos[i].Privileged = inspectData.HostConfig.Privileged
 			}
 		}
 
-		if filterOpts.IncludeStats && containers[i].State == "running" {
-			// Get stats for running containers
-			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containers[i].ID)
+		if filterOpts.IncludeStats && containerInfos[i].State == "running" {
+			// Get stats for running containers using the stats command (bindings don't provide direct stats API in a simple way)
+			// We'll use the CLI approach for stats as the bindings Stats API is streaming-based
+			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containerInfos[i].ID)
 			if statsOut, err := statsCmd.Output(); err == nil && len(statsOut) > 0 {
 				var podmanStats []struct {
 					ID            string `json:"id"`
@@ -146,7 +167,7 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 					memPercStr := strings.TrimSuffix(podmanStats[0].MemPercentage, "%")
 					memPerc, _ := strconv.ParseFloat(memPercStr, 64)
 
-					containers[i].Stats = &models.ContainerStats{
+					containerInfos[i].Stats = &models.ContainerStats{
 						CPUPercent:    cpuPerc,
 						MemoryUsage:   memUsage,
 						MemoryLimit:   memLimit,
@@ -157,64 +178,49 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		}
 	}
 
-	return containers, nil
+	return containerInfos, nil
 }
 
 // ListPods lists all Podman pods
 func (p *PodmanRuntime) ListPods(ctx context.Context, filterOpts models.FilterOptions) ([]models.PodInfo, error) {
-	args := []string{"pod", "ps", "--format", "json"}
+	// Prepare list options
+	listOpts := new(pods.ListOptions)
 
+	// Apply filters
+	filters := make(map[string][]string)
 	if filterOpts.Name != "" {
-		args = append(args, "--filter", fmt.Sprintf("name=%s", filterOpts.Name))
+		filters["name"] = []string{filterOpts.Name}
 	}
 	if filterOpts.Status != "" {
-		args = append(args, "--filter", fmt.Sprintf("status=%s", filterOpts.Status))
+		filters["status"] = []string{filterOpts.Status}
+	}
+	if len(filters) > 0 {
+		listOpts.WithFilters(filters)
 	}
 
-	cmd := exec.CommandContext(ctx, "podman", args...)
-	output, err := cmd.Output()
+	// List pods using bindings
+	podmanPods, err := pods.List(p.connCtx, listOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Podman pods: %w", err)
 	}
 
-	// Parse JSON output from podman
-	var podmanPods []struct {
-		ID         string `json:"Id"`
-		Name       string `json:"Name"`
-		Status     string `json:"Status"`
-		Created    string `json:"Created"`
-		Containers []struct {
-			ID     string `json:"Id"`
-			Names  string `json:"Names"`
-			Status string `json:"Status"`
-		} `json:"Containers"`
-	}
-
-	if len(output) > 0 {
-		if err := json.Unmarshal(output, &podmanPods); err != nil {
-			return nil, fmt.Errorf("failed to parse podman pod output: %w", err)
-		}
-	}
-
 	// Convert to PodInfo format
-	pods := make([]models.PodInfo, 0, len(podmanPods))
+	podInfos := make([]models.PodInfo, 0, len(podmanPods))
 	for _, pp := range podmanPods {
 		// Extract container IDs from the Containers array
 		containerIDs := make([]string, 0, len(pp.Containers))
 		for _, c := range pp.Containers {
-			containerIDs = append(containerIDs, c.ID)
+			containerIDs = append(containerIDs, c.Id)
 		}
 
 		// Parse Created timestamp
 		created := time.Now()
-		if pp.Created != "" {
-			if parsedTime, err := time.Parse(time.RFC3339, pp.Created); err == nil {
-				created = parsedTime
-			}
+		if !pp.Created.IsZero() {
+			created = pp.Created
 		}
 
-		pods = append(pods, models.PodInfo{
-			ID:         pp.ID,
+		podInfos = append(podInfos, models.PodInfo{
+			ID:         pp.Id,
 			Name:       pp.Name,
 			Status:     pp.Status,
 			Created:    created,
@@ -223,19 +229,14 @@ func (p *PodmanRuntime) ListPods(ctx context.Context, filterOpts models.FilterOp
 		})
 	}
 
-	return pods, nil
+	return podInfos, nil
 }
 
 // DeleteContainer deletes a Podman container
 func (p *PodmanRuntime) DeleteContainer(ctx context.Context, containerID string, force bool) error {
-	args := []string{"rm"}
-	if force {
-		args = append(args, "-f")
-	}
-	args = append(args, containerID)
-
-	cmd := exec.CommandContext(ctx, "podman", args...)
-	if err := cmd.Run(); err != nil {
+	removeOpts := new(containers.RemoveOptions).WithForce(force)
+	_, err := containers.Remove(p.connCtx, containerID, removeOpts)
+	if err != nil {
 		return fmt.Errorf("failed to delete Podman container %s: %w", containerID, err)
 	}
 	return nil
@@ -243,8 +244,8 @@ func (p *PodmanRuntime) DeleteContainer(ctx context.Context, containerID string,
 
 // StartContainer starts a Podman container
 func (p *PodmanRuntime) StartContainer(ctx context.Context, containerID string) error {
-	cmd := exec.CommandContext(ctx, "podman", "start", containerID)
-	if err := cmd.Run(); err != nil {
+	err := containers.Start(p.connCtx, containerID, nil)
+	if err != nil {
 		return fmt.Errorf("failed to start Podman container %s: %w", containerID, err)
 	}
 	return nil
@@ -252,8 +253,8 @@ func (p *PodmanRuntime) StartContainer(ctx context.Context, containerID string) 
 
 // StopContainer stops a Podman container
 func (p *PodmanRuntime) StopContainer(ctx context.Context, containerID string) error {
-	cmd := exec.CommandContext(ctx, "podman", "stop", containerID)
-	if err := cmd.Run(); err != nil {
+	err := containers.Stop(p.connCtx, containerID, nil)
+	if err != nil {
 		return fmt.Errorf("failed to stop Podman container %s: %w", containerID, err)
 	}
 	return nil
@@ -261,8 +262,8 @@ func (p *PodmanRuntime) StopContainer(ctx context.Context, containerID string) e
 
 // RestartContainer restarts a Podman container
 func (p *PodmanRuntime) RestartContainer(ctx context.Context, containerID string) error {
-	cmd := exec.CommandContext(ctx, "podman", "restart", containerID)
-	if err := cmd.Run(); err != nil {
+	err := containers.Restart(p.connCtx, containerID, nil)
+	if err != nil {
 		return fmt.Errorf("failed to restart Podman container %s: %w", containerID, err)
 	}
 	return nil
@@ -270,14 +271,9 @@ func (p *PodmanRuntime) RestartContainer(ctx context.Context, containerID string
 
 // DeletePod deletes a Podman pod
 func (p *PodmanRuntime) DeletePod(ctx context.Context, podID string, force bool) error {
-	args := []string{"pod", "rm"}
-	if force {
-		args = append(args, "-f")
-	}
-	args = append(args, podID)
-
-	cmd := exec.CommandContext(ctx, "podman", args...)
-	if err := cmd.Run(); err != nil {
+	removeOpts := new(pods.RemoveOptions).WithForce(force)
+	_, err := pods.Remove(p.connCtx, podID, removeOpts)
+	if err != nil {
 		return fmt.Errorf("failed to delete Podman pod %s: %w", podID, err)
 	}
 	return nil
@@ -285,8 +281,8 @@ func (p *PodmanRuntime) DeletePod(ctx context.Context, podID string, force bool)
 
 // StartPod starts a Podman pod
 func (p *PodmanRuntime) StartPod(ctx context.Context, podID string) error {
-	cmd := exec.CommandContext(ctx, "podman", "pod", "start", podID)
-	if err := cmd.Run(); err != nil {
+	_, err := pods.Start(p.connCtx, podID, nil)
+	if err != nil {
 		return fmt.Errorf("failed to start Podman pod %s: %w", podID, err)
 	}
 	return nil
@@ -294,8 +290,8 @@ func (p *PodmanRuntime) StartPod(ctx context.Context, podID string) error {
 
 // StopPod stops a Podman pod
 func (p *PodmanRuntime) StopPod(ctx context.Context, podID string) error {
-	cmd := exec.CommandContext(ctx, "podman", "pod", "stop", podID)
-	if err := cmd.Run(); err != nil {
+	_, err := pods.Stop(p.connCtx, podID, nil)
+	if err != nil {
 		return fmt.Errorf("failed to stop Podman pod %s: %w", podID, err)
 	}
 	return nil
@@ -303,8 +299,8 @@ func (p *PodmanRuntime) StopPod(ctx context.Context, podID string) error {
 
 // RestartPod restarts a Podman pod
 func (p *PodmanRuntime) RestartPod(ctx context.Context, podID string) error {
-	cmd := exec.CommandContext(ctx, "podman", "pod", "restart", podID)
-	if err := cmd.Run(); err != nil {
+	_, err := pods.Restart(p.connCtx, podID, nil)
+	if err != nil {
 		return fmt.Errorf("failed to restart Podman pod %s: %w", podID, err)
 	}
 	return nil
@@ -325,10 +321,18 @@ func (p *PodmanRuntime) BuildFromDockerfile(ctx context.Context, dockerfile, ima
 		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
-	// Build the image
-	cmd := exec.CommandContext(ctx, "podman", "build", "-t", imageName, "-f", dockerfilePath, tempDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to build Podman image: %w, output: %s", err, string(output))
+	// Build the image using bindings
+	buildOptions := types.BuildOptions{
+		ContainerFiles: []string{dockerfilePath},
+	}
+	// Set the context directory and output tag using the embedded buildahDefine.BuildOptions
+	buildOptions.ContextDirectory = tempDir
+	buildOptions.Output = imageName
+	buildOptions.AdditionalTags = []string{imageName}
+
+	_, err = images.Build(p.connCtx, []string{dockerfilePath}, buildOptions)
+	if err != nil {
+		return fmt.Errorf("failed to build Podman image: %w", err)
 	}
 
 	return nil
@@ -336,55 +340,111 @@ func (p *PodmanRuntime) BuildFromDockerfile(ctx context.Context, dockerfile, ima
 
 // RunContainer creates and runs a container from an image with configuration
 func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContainerRequest) (string, error) {
-	args := []string{"run", "-d", "--name", req.Name}
+	// Create a spec generator for the container
+	s := specgen.NewSpecGenerator(req.Image, false)
+	s.Name = req.Name
 
 	// Add restart policy
 	if req.RestartPolicy != "" {
-		args = append(args, "--restart", req.RestartPolicy)
+		s.RestartPolicy = req.RestartPolicy
 	}
 
 	// Add port mappings
-	for _, portMap := range req.Ports {
-		args = append(args, "-p", portMap)
+	if len(req.Ports) > 0 {
+		portMappings := make([]nettypes.PortMapping, 0, len(req.Ports))
+		for _, portMap := range req.Ports {
+			// Parse port mapping (format: "hostPort:containerPort" or "hostPort:containerPort/protocol")
+			parts := strings.Split(portMap, ":")
+			if len(parts) >= 2 {
+				hostPortStr := parts[0]
+				containerPortProto := parts[1]
+
+				// Parse container port and protocol
+				protocol := "tcp"
+				containerPortStr := containerPortProto
+				if strings.Contains(containerPortProto, "/") {
+					cpParts := strings.Split(containerPortProto, "/")
+					containerPortStr = cpParts[0]
+					if len(cpParts) > 1 {
+						protocol = cpParts[1]
+					}
+				}
+
+				// Convert to uint16
+				hostPort, _ := strconv.ParseUint(hostPortStr, 10, 16)
+				containerPort, _ := strconv.ParseUint(containerPortStr, 10, 16)
+
+				portMappings = append(portMappings, nettypes.PortMapping{
+					HostPort:      uint16(hostPort),
+					ContainerPort: uint16(containerPort),
+					Protocol:      protocol,
+				})
+			}
+		}
+		s.PortMappings = portMappings
 	}
 
-	// Create named volumes if needed and add volume mappings
+	// Create named volumes and add volume mappings
+	volumes := make([]*specgen.NamedVolume, 0)
+	mounts := make([]spec.Mount, 0)
+	
 	for _, volMap := range req.Volumes {
 		parts := strings.Split(volMap, ":")
 		if len(parts) >= 2 {
 			volumeName := parts[0]
+			containerPath := parts[1]
+			
 			// Check if it's a named volume (doesn't start with / or .)
 			if !strings.HasPrefix(volumeName, "/") && !strings.HasPrefix(volumeName, ".") {
 				// Create named volume if it doesn't exist
-				createCmd := exec.CommandContext(ctx, "podman", "volume", "create", volumeName)
-				output, err := createCmd.CombinedOutput()
-				if err != nil && !strings.Contains(string(output), "already exists") {
-					logger.Warn("RunContainer: Failed to create volume", "volume", volumeName, "error", err, "output", string(output))
-					// Continue anyway - container creation will fail if volume is truly needed
-				}
+				// Note: The bindings API will auto-create volumes, but we can explicitly create them
+				volumes = append(volumes, &specgen.NamedVolume{
+					Name: volumeName,
+					Dest: containerPath,
+				})
+			} else {
+				// It's a bind mount
+				mounts = append(mounts, spec.Mount{
+					Source:      volumeName,
+					Destination: containerPath,
+					Type:        "bind",
+				})
 			}
 		}
-		args = append(args, "-v", volMap)
+	}
+	if len(volumes) > 0 {
+		s.Volumes = volumes
+	}
+	if len(mounts) > 0 {
+		s.Mounts = mounts
 	}
 
 	// Add environment variables
+	envVars := make(map[string]string)
 	for _, env := range req.EnvVars {
-		args = append(args, "-e", env)
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			envVars[parts[0]] = parts[1]
+		}
+	}
+	if len(envVars) > 0 {
+		s.Env = envVars
 	}
 
-	// Add image name
-	args = append(args, req.Image)
-
-	// Run the container
-	cmd := exec.CommandContext(ctx, "podman", args...)
-	output, err := cmd.Output()
+	// Create the container
+	createResp, err := containers.CreateWithSpec(p.connCtx, s, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to run container: %w", err)
+		return "", fmt.Errorf("failed to create container: %w", err)
 	}
 
-	// Container ID is returned in output
-	containerID := strings.TrimSpace(string(output))
-	return containerID, nil
+	// Start the container
+	if err := containers.Start(p.connCtx, createResp.ID, nil); err != nil {
+		// Try to remove the container if start fails
+		containers.Remove(p.connCtx, createResp.ID, new(containers.RemoveOptions).WithForce(true))
+		return "", fmt.Errorf("failed to start container: %w", err)
+	}
+
+	return createResp.ID, nil
 }
 
 // DeployFromCompose deploys containers from a Podman Compose file
@@ -460,52 +520,52 @@ func (p *PodmanRuntime) DeployFromCompose(ctx context.Context, composeContent, p
 
 // PullImage pulls the latest version of a Podman image
 func (p *PodmanRuntime) PullImage(ctx context.Context, imageName string) error {
-	cmd := exec.CommandContext(ctx, "podman", "pull", imageName)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to pull Podman image %s: %w, output: %s", imageName, err, string(output))
+	pullOpts := new(images.PullOptions)
+	_, err := images.Pull(p.connCtx, imageName, pullOpts)
+	if err != nil {
+		return fmt.Errorf("failed to pull Podman image %s: %w", imageName, err)
 	}
 	return nil
 }
 
 // UpdateContainer updates a Podman container by pulling the latest image and recreating it
 func (p *PodmanRuntime) UpdateContainer(ctx context.Context, containerID string) error {
-	// Get container image name
-	cmd := exec.CommandContext(ctx, "podman", "inspect", "--format", "{{.ImageName}}", containerID)
-	output, err := cmd.Output()
+	// Inspect the container to get its configuration
+	inspectData, err := containers.Inspect(p.connCtx, containerID, new(containers.InspectOptions).WithSize(false))
 	if err != nil {
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
 
-	imageName := strings.TrimSpace(string(output))
+	imageName := inspectData.ImageName
+	containerName := inspectData.Name
 
 	// Pull the latest image
 	if err := p.PullImage(ctx, imageName); err != nil {
 		return err
 	}
 
-	// Get container name
-	cmd = exec.CommandContext(ctx, "podman", "inspect", "--format", "{{.Name}}", containerID)
-	output, err = cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to get container name: %w", err)
-	}
-
-	containerName := strings.TrimSpace(string(output))
-
-	// Stop and remove the old container
-	if err := exec.CommandContext(ctx, "podman", "stop", containerID).Run(); err != nil {
+	// Stop the container
+	if err := containers.Stop(p.connCtx, containerID, nil); err != nil {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
+	// Remove the old container
 	if err := p.DeleteContainer(ctx, containerID, true); err != nil {
 		return err
 	}
 
-	// Create and start a new container
-	// Note: This is simplified - you'd want to preserve all original settings
-	cmd = exec.CommandContext(ctx, "podman", "run", "-d", "--name", containerName, imageName)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create new container: %w, output: %s", err, string(output))
+	// Create and start a new container with the same configuration
+	// Note: This is simplified - ideally we'd preserve all original settings
+	s := specgen.NewSpecGenerator(imageName, false)
+	s.Name = containerName
+
+	createResp, err := containers.CreateWithSpec(p.connCtx, s, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create new container: %w", err)
+	}
+
+	if err := containers.Start(p.connCtx, createResp.ID, nil); err != nil {
+		return fmt.Errorf("failed to start new container: %w", err)
 	}
 
 	return nil
@@ -513,44 +573,57 @@ func (p *PodmanRuntime) UpdateContainer(ctx context.Context, containerID string)
 
 // StreamLogs streams logs from a Podman container
 func (p *PodmanRuntime) StreamLogs(ctx context.Context, containerID string, follow bool, tail string) (io.ReadCloser, error) {
-	args := []string{"logs"}
-	if follow {
-		args = append(args, "-f")
-	}
+	// Create a pipe for the logs
+	pr, pw := io.Pipe()
+
+	// Create channels for stdout and stderr
+	stdoutChan := make(chan string, 100)
+	stderrChan := make(chan string, 100)
+
+	// Prepare log options
+	logOpts := new(containers.LogOptions).WithFollow(follow).WithTimestamps(true)
 	if tail != "" && tail != "all" {
-		args = append(args, "--tail", tail)
-	}
-	args = append(args, "-t", containerID)
-
-	cmd := exec.CommandContext(ctx, "podman", args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+		logOpts.WithTail(tail)
 	}
 
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start podman logs: %w", err)
-	}
+	// Start goroutine to receive logs and write to pipe
+	go func() {
+		defer pw.Close()
+		defer close(stdoutChan)
+		defer close(stderrChan)
 
-	// Create a ReadCloser that also handles process cleanup
-	return &cmdReadCloser{
-		ReadCloser: stdout,
-		cmd:        cmd,
-	}, nil
-}
+		// Start logging in a goroutine
+		errChan := make(chan error, 1)
+		go func() {
+			errChan <- containers.Logs(p.connCtx, containerID, logOpts, stdoutChan, stderrChan)
+		}()
 
-// cmdReadCloser wraps an io.ReadCloser and also handles command cleanup
-type cmdReadCloser struct {
-	io.ReadCloser
-	cmd *exec.Cmd
-}
+		// Read from channels and write to pipe
+		done := false
+		for !done {
+			select {
+			case msg, ok := <-stdoutChan:
+				if ok {
+					pw.Write([]byte(msg + "\n"))
+				} else {
+					done = true
+				}
+			case msg, ok := <-stderrChan:
+				if ok {
+					pw.Write([]byte(msg + "\n"))
+				}
+			case err := <-errChan:
+				if err != nil {
+					logger.Warn("StreamLogs: Error streaming logs", "error", err)
+				}
+				done = true
+			case <-ctx.Done():
+				done = true
+			}
+		}
+	}()
 
-func (c *cmdReadCloser) Close() error {
-	c.ReadCloser.Close()
-	if c.cmd.Process != nil {
-		c.cmd.Process.Kill()
-	}
-	return nil
+	return pr, nil
 }
 
 // GetRuntimeName returns "podman"
