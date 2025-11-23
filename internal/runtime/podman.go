@@ -21,8 +21,8 @@ import (
 	"github.com/containers/podman/v5/pkg/bindings/pods"
 	"github.com/containers/podman/v5/pkg/domain/entities/types"
 	"github.com/containers/podman/v5/pkg/specgen"
-	nettypes "go.podman.io/common/libnetwork/types"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
+	nettypes "go.podman.io/common/libnetwork/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -390,13 +390,13 @@ func (p *PodmanRuntime) RunContainer(ctx context.Context, req models.RunContaine
 	// Create named volumes and add volume mappings
 	volumes := make([]*specgen.NamedVolume, 0)
 	mounts := make([]spec.Mount, 0)
-	
+
 	for _, volMap := range req.Volumes {
 		parts := strings.Split(volMap, ":")
 		if len(parts) >= 2 {
 			volumeName := parts[0]
 			containerPath := parts[1]
-			
+
 			// Check if it's a named volume (doesn't start with / or .)
 			if !strings.HasPrefix(volumeName, "/") && !strings.HasPrefix(volumeName, ".") {
 				// Create named volume if it doesn't exist
