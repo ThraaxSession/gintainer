@@ -346,6 +346,39 @@ Schedule format follows standard cron expressions:
 - `0 */4 * * *` - Run every 4 hours
 - `0 0 * * 0` - Run at midnight every Sunday
 
+### Container Labels
+
+#### Update Container Labels
+```bash
+PUT /api/containers/:id/labels?runtime=<runtime>
+Content-Type: application/json
+
+{
+  "labels": {
+    "custom.label": "value",
+    "another.label": "value2"
+  }
+}
+```
+
+#### Update Caddy Labels
+```bash
+PUT /api/containers/:id/caddy-labels?runtime=<runtime>
+Content-Type: application/json
+
+{
+  "domain": "example.com",
+  "port": "8080",
+  "path": "/",
+  "tls": "auto"
+}
+```
+
+#### Delete Caddy Labels
+```bash
+DELETE /api/containers/:id/caddy-labels?runtime=<runtime>
+```
+
 ### Caddy Integration
 
 **Note:** These endpoints are only available when Caddy integration is enabled in the configuration (`caddy.enabled: true`).
@@ -392,15 +425,19 @@ POST /api/caddy/reload
 
 #### Container Labels for Caddy
 
-Containers can use labels to configure automatic reverse proxy:
+Containers can use labels to configure automatic reverse proxy. You can configure these labels through the web UI (Containers page → gear icon) or during container creation:
 
 ```yaml
 labels:
   caddy.domain: "example.com"      # Required: Domain name
-  caddy.port: "8080"               # Optional: Port (defaults to first exposed port)
+  caddy.port: "8080"               # Required: Port
   caddy.path: "/"                  # Optional: Path prefix (defaults to /)
-  caddy.tls: "auto"                # Optional: TLS config (auto, off, or custom)
+  caddy.tls: "auto"                # Optional: TLS config (auto, off, or internal)
 ```
+
+**Note:** Both Docker and Podman have a limitation where labels cannot be updated on existing containers. Labels must be set at container creation time. To change labels, recreate the container with the desired labels.
+
+See [CADDY_LABELS_GUIDE.md](CADDY_LABELS_GUIDE.md) for detailed instructions on configuring Caddy labels through the web UI.
 
 ## Project Structure
 

@@ -139,6 +139,9 @@ func main() {
 		api.POST("/containers/:id/restart", handler.RestartContainer)
 		api.POST("/containers/update", handler.UpdateContainers)
 		api.GET("/containers/:id/logs", handler.StreamLogs)
+		api.PUT("/containers/:id/labels", handler.UpdateContainerLabels)
+		api.PUT("/containers/:id/caddy-labels", handler.UpdateContainerCaddyLabels)
+		api.DELETE("/containers/:id/caddy-labels", handler.DeleteContainerCaddyLabels)
 
 		// Pod routes
 		api.GET("/pods", handler.ListPods)

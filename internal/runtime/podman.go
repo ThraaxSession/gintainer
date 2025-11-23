@@ -742,3 +742,186 @@ func parseSize(sizeStr string) uint64 {
 
 	return uint64(val * float64(multiplier))
 }
+
+// SetContainerLabels sets or updates labels on a Podman container
+// Note: Podman does not support updating labels on existing containers.
+// Labels must be set at container creation time.
+func (p *PodmanRuntime) SetContainerLabels(ctx context.Context, containerID string, labels map[string]string) error {
+	logger.Debug("SetContainerLabels: Setting labels on Podman container", "id", containerID, "labels", labels)
+
+	// Get container details for logging
+	args := []string{"container", "inspect", "--format", "{{.Name}}", containerID}
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.CombinedOutput()
+	containerName := strings.TrimSpace(string(output))
+	if err != nil {
+		logger.Error("SetContainerLabels: Failed to inspect container", "id", containerID, "error", err)
+		containerName = containerID
+	}
+
+	logger.Warn("SetContainerLabels: Podman does not support updating labels on existing containers",
+		"id", containerID,
+		"container_name", containerName,
+		"note", "Labels must be set at container creation time")
+
+	return fmt.Errorf("Podman does not support updating labels on existing containers. Please recreate the container with the desired labels")
+}
+
+// RemoveContainerLabels removes labels from a Podman container
+// Note: Podman does not support updating labels on existing containers.
+func (p *PodmanRuntime) RemoveContainerLabels(ctx context.Context, containerID string, labelKeys []string) error {
+	logger.Debug("RemoveContainerLabels: Removing labels from Podman container", "id", containerID, "keys", labelKeys)
+
+	// Get container details for logging
+	args := []string{"container", "inspect", "--format", "{{.Name}}", containerID}
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.CombinedOutput()
+	containerName := strings.TrimSpace(string(output))
+	if err != nil {
+		logger.Error("RemoveContainerLabels: Failed to inspect container", "id", containerID, "error", err)
+		containerName = containerID
+	}
+
+	logger.Warn("RemoveContainerLabels: Podman does not support removing labels from existing containers",
+		"id", containerID,
+		"container_name", containerName,
+		"note", "Labels must be set at container creation time")
+
+	return fmt.Errorf("Podman does not support removing labels from existing containers. Please recreate the container without the labels")
+}
+
+// RecreateContainerWithLabels recreates a Podman container with updated labels
+func (p *PodmanRuntime) RecreateContainerWithLabels(ctx context.Context, containerID string, labels map[string]string, removeLabelKeys []string) error {
+	logger.Info("RecreateContainerWithLabels: Recreating Podman container with updated labels", "id", containerID)
+
+	// Get container details using Podman bindings API
+	inspectData, err := containers.Inspect(p.connCtx, containerID, new(containers.InspectOptions).WithSize(false))
+	if err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to inspect container", "id", containerID, "error", err)
+		return fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	containerName := inspectData.Name
+	wasRunning := inspectData.State.Running
+	imageName := inspectData.ImageName
+
+	// Get existing labels
+	existingLabels := make(map[string]string)
+	if inspectData.Config != nil && inspectData.Config.Labels != nil {
+		for k, v := range inspectData.Config.Labels {
+			existingLabels[k] = v
+		}
+	}
+
+	// Merge labels
+	newLabels := make(map[string]string)
+	for k, v := range existingLabels {
+		newLabels[k] = v
+	}
+	for k, v := range labels {
+		newLabels[k] = v
+	}
+	for _, key := range removeLabelKeys {
+		delete(newLabels, key)
+	}
+
+	logger.Debug("RecreateContainerWithLabels: New labels", "labels", newLabels)
+
+	// Get env vars
+	var envVars []string
+	if inspectData.Config != nil && inspectData.Config.Env != nil {
+		envVars = inspectData.Config.Env
+	}
+
+	// Get port bindings
+	var ports []string
+	if inspectData.HostConfig != nil && inspectData.HostConfig.PortBindings != nil {
+		for containerPort, bindings := range inspectData.HostConfig.PortBindings {
+			for _, binding := range bindings {
+				if binding.HostPort != "" {
+					// Remove protocol suffix from container port (e.g., "8080/tcp" -> "8080")
+					cleanPort := strings.Split(containerPort, "/")[0]
+					ports = append(ports, fmt.Sprintf("%s:%s", binding.HostPort, cleanPort))
+				}
+			}
+		}
+	}
+
+	// Get volume bindings
+	var volumes []string
+	if inspectData.HostConfig != nil && inspectData.HostConfig.Binds != nil {
+		volumes = inspectData.HostConfig.Binds
+	}
+
+	// Get restart policy
+	restartPolicy := ""
+	if inspectData.HostConfig != nil && inspectData.HostConfig.RestartPolicy != nil {
+		restartPolicy = inspectData.HostConfig.RestartPolicy.Name
+	}
+
+	// Stop container if running
+	if wasRunning {
+		logger.Debug("RecreateContainerWithLabels: Stopping container", "id", containerID)
+		if err := containers.Stop(p.connCtx, containerID, nil); err != nil {
+			logger.Warn("RecreateContainerWithLabels: Failed to stop container", "id", containerID, "error", err)
+			// Continue anyway
+		}
+	}
+
+	// Remove old container
+	logger.Debug("RecreateContainerWithLabels: Removing old container", "id", containerID)
+	if _, err := containers.Remove(p.connCtx, containerID, new(containers.RemoveOptions).WithForce(true)); err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to delete container", "id", containerID, "error", err)
+		return fmt.Errorf("failed to delete container: %w", err)
+	}
+
+	// Build run command with labels
+	runArgs := []string{"run", "-d"}
+
+	// Add name
+	if containerName != "" {
+		runArgs = append(runArgs, "--name", containerName)
+	}
+
+	// Add labels
+	for k, v := range newLabels {
+		runArgs = append(runArgs, "--label", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Add ports
+	for _, port := range ports {
+		runArgs = append(runArgs, "-p", port)
+	}
+
+	// Add volumes
+	for _, vol := range volumes {
+		runArgs = append(runArgs, "-v", vol)
+	}
+
+	// Add env vars
+	for _, env := range envVars {
+		runArgs = append(runArgs, "-e", env)
+	}
+
+	// Add restart policy
+	if restartPolicy != "" && restartPolicy != "no" {
+		runArgs = append(runArgs, "--restart", restartPolicy)
+	}
+
+	// Add image
+	runArgs = append(runArgs, imageName)
+
+	logger.Debug("RecreateContainerWithLabels: Creating new container", "name", containerName, "args", runArgs)
+
+	cmd := exec.CommandContext(ctx, "podman", runArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to create container", "error", err, "output", string(output))
+		return fmt.Errorf("failed to create container: %w (output: %s)", err, string(output))
+	}
+
+	newContainerID := strings.TrimSpace(string(output))
+	logger.Info("RecreateContainerWithLabels: Successfully recreated container with labels", "old_id", containerID, "new_id", newContainerID)
+
+	return nil
+}

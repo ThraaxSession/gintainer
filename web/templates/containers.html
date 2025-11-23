@@ -48,12 +48,13 @@
                 <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" id="filterStatus" onchange="loadContainers()"><option value="">All</option><option value="running" selected>Running</option><option value="exited">Exited</option></select></div>
                 <div class="col-md-4"><label class="form-label">Name</label><input type="text" class="form-control" id="filterName" placeholder="Filter by name" onkeyup="loadContainers()"></div>
             </div></div></div></div></div>
-            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><div><button class="btn btn-gradient btn-sm me-2" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-play-circle"></i> Create</button><button class="btn btn-gradient btn-sm" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Ports</th><th>Created</th><th>CPU</th><th>Memory</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="9" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
+            <div class="row"><div class="col-md-12"><div class="card"><div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center"><h5 class="card-title mb-0">Container List</h5><div><button class="btn btn-gradient btn-sm me-2" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-play-circle"></i> Create</button><button class="btn btn-gradient btn-sm" data-bs-toggle="modal" data-bs-target="#buildModal"><i class="bi bi-plus-circle"></i> Build</button></div></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Runtime</th><th>Ports</th><th>Caddy Domain</th><th>Caddy Port</th><th>Created</th><th>CPU</th><th>Memory</th><th>Actions</th></tr></thead><tbody id="containerList"><tr><td colspan="11" class="text-center">Loading...</td></tr></tbody></table></div></div></div></div></div>
         </main>
     </div></div>
     <div class="modal fade" id="createModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Create Container from Image</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form id="createForm" class="needs-validation" novalidate><div class="mb-3"><label class="form-label">Container Name <span class="text-danger">*</span></label><input type="text" class="form-control" id="containerName" placeholder="my-container" required pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"><div class="invalid-feedback">Please provide a valid container name</div></div><div class="mb-3"><label class="form-label">Image <span class="text-danger">*</span></label><input type="text" class="form-control" id="containerImage" placeholder="nginx:latest" required><div class="invalid-feedback">Please provide an image name</div></div><div class="mb-3"><label class="form-label">Runtime <span class="text-danger">*</span></label><select class="form-select" id="createRuntime" required><option value="docker">Docker</option><option value="podman">Podman</option></select></div><div class="mb-3"><label class="form-label">Restart Policy</label><select class="form-select" id="restartPolicy"><option value="">No</option><option value="always">Always</option><option value="unless-stopped">Unless Stopped</option><option value="on-failure">On Failure</option></select></div><div class="mb-3"><label class="form-label">Port Mappings</label><div id="portMappings"><div class="input-group mb-2"><input type="number" class="form-control" placeholder="Host Port (e.g., 8080)" id="hostPort0"><input type="number" class="form-control" placeholder="Container Port (e.g., 80)" id="containerPort0"><button type="button" class="btn btn-outline-secondary" onclick="addPortMapping()"><i class="bi bi-plus"></i></button></div></div><small class="text-muted">Format: HostPort:ContainerPort</small></div><div class="mb-3"><label class="form-label">Volumes</label><div id="volumeMappings"><div class="input-group mb-2"><input type="text" class="form-control" placeholder="Host Path (e.g., /host/data)" id="hostPath0"><input type="text" class="form-control" placeholder="Container Path (e.g., /data)" id="containerPath0"><button type="button" class="btn btn-outline-secondary" onclick="addVolumeMapping()"><i class="bi bi-plus"></i></button></div></div><small class="text-muted">Format: HostPath:ContainerPath</small></div><div class="mb-3"><label class="form-label">Environment Variables</label><textarea class="form-control" id="envVars" rows="3" placeholder="KEY1=value1&#10;KEY2=value2"></textarea><small class="text-muted">One per line in KEY=VALUE format</small></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-gradient" onclick="createContainer()">Create</button></div></div></div></div>
     <div class="modal fade" id="buildModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Build from Dockerfile</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form id="buildForm" class="needs-validation" novalidate><div class="mb-3"><label class="form-label">Image Name <span class="text-danger">*</span></label><input type="text" class="form-control" id="imageName" placeholder="my-image:latest" required pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]*(/[a-zA-Z0-9][a-zA-Z0-9_.-]*)*(:[a-zA-Z0-9_.-]+)?$"><div class="invalid-feedback">Please provide a valid image name (e.g., my-image:latest)</div></div><div class="mb-3"><label class="form-label">Runtime <span class="text-danger">*</span></label><select class="form-select" id="buildRuntime" required><option value="docker">Docker</option><option value="podman">Podman</option></select></div><div class="mb-3"><label class="form-label">Dockerfile <span class="text-danger">*</span></label><textarea class="form-control" id="dockerfile" rows="10" placeholder="FROM alpine:latest" required minlength="10"></textarea><div class="invalid-feedback">Please provide Dockerfile content</div></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-gradient" onclick="buildImage()">Build</button></div></div></div></div>
     <div class="modal fade" id="logsModal" tabindex="-1"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Container Logs: <span id="logContainerName"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="log-viewer" id="logContent">Loading...</div></div></div></div></div>
+    <div class="modal fade" id="caddyModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Configure Caddy Labels: <span id="caddyContainerName"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-info"><i class="bi bi-info-circle"></i> <strong>About Caddy Labels:</strong> These labels configure automatic reverse proxy for your container. You need to activate Caddy configuration in the <a href="/config" class="alert-link">Configuration page</a> for these labels to take effect.</div><form id="caddyForm" class="needs-validation" novalidate><div class="mb-3"><label class="form-label">Domain <span class="text-danger">*</span></label><input type="text" class="form-control" id="caddyDomain" placeholder="example.com" required><div class="invalid-feedback">Please provide a domain name</div><small class="text-muted">The domain name for the reverse proxy (e.g., example.com)</small></div><div class="mb-3"><label class="form-label">Port <span class="text-danger">*</span></label><input type="number" class="form-control" id="caddyPort" placeholder="8080" required><div class="invalid-feedback">Please provide a port number</div><small class="text-muted">The container port to proxy to (e.g., 8080)</small></div><div class="mb-3"><label class="form-label">Path</label><input type="text" class="form-control" id="caddyPath" placeholder="/" value="/"><small class="text-muted">The URL path prefix (default: /)</small></div><div class="mb-3"><label class="form-label">TLS</label><select class="form-select" id="caddyTLS"><option value="auto" selected>Auto (Let's Encrypt)</option><option value="off">Off (No TLS)</option><option value="internal">Internal (Self-signed)</option></select><small class="text-muted">TLS/HTTPS configuration (default: auto)</small></div></form></div><div class="modal-footer"><button type="button" class="btn btn-danger" onclick="deleteCaddyLabels()"><i class="bi bi-trash"></i> Delete Labels</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-gradient" onclick="saveCaddyLabels()">Save</button></div></div></div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
 function showToast(message, type = 'info') {
@@ -80,16 +81,20 @@ function loadContainers() {
         })
         .then(data=>{
             const c = data.containers || []; const tbody = document.getElementById('containerList');
-            tbody.innerHTML = c.length===0 ? '<tr><td colspan="9" class="text-center">No containers</td></tr>' :
+            tbody.innerHTML = c.length===0 ? '<tr><td colspan="11" class="text-center">No containers</td></tr>' :
                 c.map(x => {
                     const created = new Date(x.created).toLocaleDateString();
                     const cpuDisplay = x.stats && x.state === 'running' ? `${x.stats.cpu_percent.toFixed(1)}%` : '-';
                     const memDisplay = x.stats && x.state === 'running' ? formatBytes(x.stats.memory_usage) : '-';
                     const privilegedBadge = x.privileged ? '<span class="badge bg-warning text-dark ms-1" title="Privileged"><i class="bi bi-shield-lock"></i></span>' : '';
                     const portsDisplay = x.ports && x.ports.length > 0 ? x.ports.map(p => `${p.host_port}:${p.container_port}`).join(', ') : '-';
-                    return `<tr><td>${x.name}${privilegedBadge}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>${portsDisplay}</td><td>${created}</td><td>${cpuDisplay}</td><td>${memDisplay}</td><td>
+                    const caddyDomain = x.labels && x.labels['caddy.domain'] ? x.labels['caddy.domain'] : '-';
+                    const caddyPort = x.labels && x.labels['caddy.port'] ? x.labels['caddy.port'] : '-';
+                    const hasCaddy = x.labels && x.labels['caddy.domain'];
+                    return `<tr><td>${x.name}${privilegedBadge}</td><td>${x.image}</td><td><span class="badge bg-${x.state==='running'?'success':'secondary'}">${x.state}</span></td><td><span class="badge bg-info">${x.runtime}</span></td><td>${portsDisplay}</td><td>${caddyDomain}</td><td>${caddyPort}</td><td>${created}</td><td>${cpuDisplay}</td><td>${memDisplay}</td><td>
                         ${x.state==='running'?`<button class="btn btn-sm btn-warning" onclick="stopContainer('${x.id}','${x.runtime}')"><i class="bi bi-stop-circle"></i></button>`:`<button class="btn btn-sm btn-success" onclick="startContainer('${x.id}','${x.runtime}')"><i class="bi bi-play-circle"></i></button>`}
                         <button class="btn btn-sm btn-info" onclick="restartContainer('${x.id}','${x.runtime}')"><i class="bi bi-arrow-clockwise"></i></button>
+                        <button class="btn btn-sm ${hasCaddy?'btn-primary':'btn-outline-primary'}" onclick='configureCaddy(${JSON.stringify(x)})'><i class="bi bi-gear"></i></button>
                         <button class="btn btn-sm btn-outline-primary" onclick="viewLogs('${x.id}','${x.name}','${x.runtime}')"><i class="bi bi-file-text"></i></button>
                         <button class="btn btn-sm btn-outline-danger" onclick="deleteContainer('${x.id}','${x.runtime}')"><i class="bi bi-trash"></i></button>
                     </td></tr>`;
@@ -271,6 +276,102 @@ function viewLogs(id, name, rt) {
             document.getElementById('logContent').textContent = 'Error loading logs: ' + err.message;
             showToast('Error loading logs: ' + err.message, 'error');
         });
+}
+
+let currentCaddyContainerID = '';
+let currentCaddyContainerRuntime = '';
+
+function configureCaddy(container) {
+    currentCaddyContainerID = container.id;
+    currentCaddyContainerRuntime = container.runtime;
+    document.getElementById('caddyContainerName').textContent = container.name;
+    
+    // Reset form and clear validation
+    const form = document.getElementById('caddyForm');
+    form.reset();
+    form.classList.remove('was-validated');
+    
+    // Set default values
+    document.getElementById('caddyPath').value = '/';
+    document.getElementById('caddyTLS').value = 'auto';
+    
+    // Check if container has existing Caddy labels
+    if (container.labels) {
+        document.getElementById('caddyDomain').value = container.labels['caddy.domain'] || '';
+        document.getElementById('caddyPort').value = container.labels['caddy.port'] || '';
+        document.getElementById('caddyPath').value = container.labels['caddy.path'] || '/';
+        document.getElementById('caddyTLS').value = container.labels['caddy.tls'] || 'auto';
+    }
+    
+    // If no caddy.port is set, try to prefill with the first exposed container port
+    if (!document.getElementById('caddyPort').value && container.ports && container.ports.length > 0) {
+        // Use the first container port as default
+        const firstPort = container.ports[0].container_port;
+        if (firstPort) {
+            document.getElementById('caddyPort').value = firstPort;
+        }
+    }
+    
+    new bootstrap.Modal(document.getElementById('caddyModal')).show();
+}
+
+function saveCaddyLabels() {
+    const form = document.getElementById('caddyForm');
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        showToast('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    const domain = document.getElementById('caddyDomain').value;
+    const port = document.getElementById('caddyPort').value;
+    const path = document.getElementById('caddyPath').value;
+    const tls = document.getElementById('caddyTLS').value;
+    
+    const payload = {
+        domain: domain,
+        port: port,
+        path: path,
+        tls: tls
+    };
+    
+    showToast('Updating Caddy labels...', 'info');
+    fetch(`/api/containers/${currentCaddyContainerID}/caddy-labels?runtime=${currentCaddyContainerRuntime}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to update Caddy labels');
+            return r.json();
+        })
+        .then(() => {
+            showToast('Caddy labels updated successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('caddyModal')).hide();
+            form.classList.remove('was-validated');
+            loadContainers();
+        })
+        .catch(err => showToast('Error updating Caddy labels: ' + err.message, 'error'));
+}
+
+function deleteCaddyLabels() {
+    if (!confirm('Are you sure you want to delete all Caddy labels from this container?')) return;
+    
+    showToast('Deleting Caddy labels...', 'info');
+    fetch(`/api/containers/${currentCaddyContainerID}/caddy-labels?runtime=${currentCaddyContainerRuntime}`, {
+        method: 'DELETE'
+    })
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to delete Caddy labels');
+            return r.json();
+        })
+        .then(() => {
+            showToast('Caddy labels deleted successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('caddyModal')).hide();
+            document.getElementById('caddyForm').reset();
+            loadContainers();
+        })
+        .catch(err => showToast('Error deleting Caddy labels: ' + err.message, 'error'));
 }
 
 // Reset counters when modals are opened
