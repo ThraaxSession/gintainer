@@ -789,3 +789,198 @@ func (p *PodmanRuntime) RemoveContainerLabels(ctx context.Context, containerID s
 
 	return fmt.Errorf("Podman does not support removing labels from existing containers. Please recreate the container without the labels")
 }
+
+// RecreateContainerWithLabels recreates a Podman container with updated labels
+func (p *PodmanRuntime) RecreateContainerWithLabels(ctx context.Context, containerID string, labels map[string]string, removeLabelKeys []string) error {
+	logger.Info("RecreateContainerWithLabels: Recreating Podman container with updated labels", "id", containerID)
+
+	// Get container details using podman inspect
+	args := []string{"container", "inspect", containerID}
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to inspect container", "id", containerID, "error", err)
+		return fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Parse JSON output
+	var inspectData []map[string]interface{}
+	if err := json.Unmarshal(output, &inspectData); err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to parse inspect output", "error", err)
+		return fmt.Errorf("failed to parse inspect output: %w", err)
+	}
+
+	if len(inspectData) == 0 {
+		return fmt.Errorf("container not found")
+	}
+
+	inspect := inspectData[0]
+
+	// Get container name
+	containerName := ""
+	if name, ok := inspect["Name"].(string); ok {
+		containerName = name
+	}
+
+	// Check if container was running
+	wasRunning := false
+	if state, ok := inspect["State"].(map[string]interface{}); ok {
+		if status, ok := state["Status"].(string); ok {
+			wasRunning = (status == "running")
+		}
+	}
+
+	// Get existing labels
+	existingLabels := make(map[string]string)
+	if config, ok := inspect["Config"].(map[string]interface{}); ok {
+		if lbls, ok := config["Labels"].(map[string]interface{}); ok {
+			for k, v := range lbls {
+				if strVal, ok := v.(string); ok {
+					existingLabels[k] = strVal
+				}
+			}
+		}
+	}
+
+	// Merge labels
+	newLabels := make(map[string]string)
+	for k, v := range existingLabels {
+		newLabels[k] = v
+	}
+	for k, v := range labels {
+		newLabels[k] = v
+	}
+	for _, key := range removeLabelKeys {
+		delete(newLabels, key)
+	}
+
+	logger.Debug("RecreateContainerWithLabels: New labels", "labels", newLabels)
+
+	// Get image name
+	imageName := ""
+	if config, ok := inspect["Config"].(map[string]interface{}); ok {
+		if img, ok := config["Image"].(string); ok {
+			imageName = img
+		}
+	}
+
+	// Get env vars
+	var envVars []string
+	if config, ok := inspect["Config"].(map[string]interface{}); ok {
+		if env, ok := config["Env"].([]interface{}); ok {
+			for _, e := range env {
+				if strVal, ok := e.(string); ok {
+					envVars = append(envVars, strVal)
+				}
+			}
+		}
+	}
+
+	// Get port bindings
+	var ports []string
+	if hostConfig, ok := inspect["HostConfig"].(map[string]interface{}); ok {
+		if portBindings, ok := hostConfig["PortBindings"].(map[string]interface{}); ok {
+			for containerPort, bindings := range portBindings {
+				if bindingArray, ok := bindings.([]interface{}); ok {
+					for _, binding := range bindingArray {
+						if bindingMap, ok := binding.(map[string]interface{}); ok {
+							if hostPort, ok := bindingMap["HostPort"].(string); ok {
+								// Remove protocol suffix from container port (e.g., "8080/tcp" -> "8080")
+								cleanPort := strings.Split(containerPort, "/")[0]
+								ports = append(ports, fmt.Sprintf("%s:%s", hostPort, cleanPort))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Get volume bindings
+	var volumes []string
+	if hostConfig, ok := inspect["HostConfig"].(map[string]interface{}); ok {
+		if binds, ok := hostConfig["Binds"].([]interface{}); ok {
+			for _, bind := range binds {
+				if strVal, ok := bind.(string); ok {
+					volumes = append(volumes, strVal)
+				}
+			}
+		}
+	}
+
+	// Get restart policy
+	restartPolicy := ""
+	if hostConfig, ok := inspect["HostConfig"].(map[string]interface{}); ok {
+		if policy, ok := hostConfig["RestartPolicy"].(map[string]interface{}); ok {
+			if name, ok := policy["Name"].(string); ok {
+				restartPolicy = name
+			}
+		}
+	}
+
+	// Stop container if running
+	if wasRunning {
+		logger.Debug("RecreateContainerWithLabels: Stopping container", "id", containerID)
+		if err := p.StopContainer(ctx, containerID); err != nil {
+			logger.Warn("RecreateContainerWithLabels: Failed to stop container", "id", containerID, "error", err)
+			// Continue anyway
+		}
+	}
+
+	// Remove old container
+	logger.Debug("RecreateContainerWithLabels: Removing old container", "id", containerID)
+	if err := p.DeleteContainer(ctx, containerID, true); err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to delete container", "id", containerID, "error", err)
+		return fmt.Errorf("failed to delete container: %w", err)
+	}
+
+	// Build run command with labels
+	runArgs := []string{"run", "-d"}
+
+	// Add name
+	if containerName != "" {
+		runArgs = append(runArgs, "--name", containerName)
+	}
+
+	// Add labels
+	for k, v := range newLabels {
+		runArgs = append(runArgs, "--label", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Add ports
+	for _, port := range ports {
+		runArgs = append(runArgs, "-p", port)
+	}
+
+	// Add volumes
+	for _, vol := range volumes {
+		runArgs = append(runArgs, "-v", vol)
+	}
+
+	// Add env vars
+	for _, env := range envVars {
+		runArgs = append(runArgs, "-e", env)
+	}
+
+	// Add restart policy
+	if restartPolicy != "" && restartPolicy != "no" {
+		runArgs = append(runArgs, "--restart", restartPolicy)
+	}
+
+	// Add image
+	runArgs = append(runArgs, imageName)
+
+	logger.Debug("RecreateContainerWithLabels: Creating new container", "name", containerName, "args", runArgs)
+
+	cmd = exec.CommandContext(ctx, "podman", runArgs...)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to create container", "error", err, "output", string(output))
+		return fmt.Errorf("failed to create container: %w (output: %s)", err, string(output))
+	}
+
+	newContainerID := strings.TrimSpace(string(output))
+	logger.Info("RecreateContainerWithLabels: Successfully recreated container with labels", "old_id", containerID, "new_id", newContainerID)
+
+	return nil
+}

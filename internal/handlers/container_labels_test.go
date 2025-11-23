@@ -47,6 +47,25 @@ func (m *mockRuntimeWithLabels) RemoveContainerLabels(ctx context.Context, conta
 	return nil
 }
 
+func (m *mockRuntimeWithLabels) RecreateContainerWithLabels(ctx context.Context, containerID string, labels map[string]string, removeLabelKeys []string) error {
+	// Merge existing labels with new ones
+	if m.labels[containerID] == nil {
+		m.labels[containerID] = make(map[string]string)
+	}
+
+	// Add/update labels
+	for k, v := range labels {
+		m.labels[containerID][k] = v
+	}
+
+	// Remove specified labels
+	for _, key := range removeLabelKeys {
+		delete(m.labels[containerID], key)
+	}
+
+	return nil
+}
+
 func (m *mockRuntimeWithLabels) ListContainers(ctx context.Context, filters models.FilterOptions) ([]models.ContainerInfo, error) {
 	containers := []models.ContainerInfo{
 		{

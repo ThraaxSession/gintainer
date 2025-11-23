@@ -578,6 +578,98 @@ func (d *DockerRuntime) RemoveContainerLabels(ctx context.Context, containerID s
 	return fmt.Errorf("Docker does not support removing labels from existing containers. Please recreate the container without the labels")
 }
 
+// RecreateContainerWithLabels recreates a Docker container with updated labels
+func (d *DockerRuntime) RecreateContainerWithLabels(ctx context.Context, containerID string, labels map[string]string, removeLabelKeys []string) error {
+	logger.Info("RecreateContainerWithLabels: Recreating Docker container with updated labels", "id", containerID)
+
+	// Get container details
+	inspect, err := d.client.ContainerInspect(ctx, containerID)
+	if err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to inspect container", "id", containerID, "error", err)
+		return fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	containerName := strings.TrimPrefix(inspect.Name, "/")
+	wasRunning := inspect.State.Running
+
+	// Merge existing labels with new labels
+	newLabels := make(map[string]string)
+	if inspect.Config.Labels != nil {
+		for k, v := range inspect.Config.Labels {
+			newLabels[k] = v
+		}
+	}
+	// Add/update new labels
+	for k, v := range labels {
+		newLabels[k] = v
+	}
+	// Remove specified labels
+	for _, key := range removeLabelKeys {
+		delete(newLabels, key)
+	}
+
+	logger.Debug("RecreateContainerWithLabels: New labels", "labels", newLabels)
+
+	// Stop container if running
+	if wasRunning {
+		logger.Debug("RecreateContainerWithLabels: Stopping container", "id", containerID)
+		if err := d.StopContainer(ctx, containerID); err != nil {
+			logger.Error("RecreateContainerWithLabels: Failed to stop container", "id", containerID, "error", err)
+			return fmt.Errorf("failed to stop container: %w", err)
+		}
+	}
+
+	// Remove old container
+	logger.Debug("RecreateContainerWithLabels: Removing old container", "id", containerID)
+	if err := d.DeleteContainer(ctx, containerID, true); err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to delete container", "id", containerID, "error", err)
+		return fmt.Errorf("failed to delete container: %w", err)
+	}
+
+	// Recreate container with new labels
+	config := &container.Config{
+		Image:        inspect.Config.Image,
+		Env:          inspect.Config.Env,
+		Cmd:          inspect.Config.Cmd,
+		Entrypoint:   inspect.Config.Entrypoint,
+		WorkingDir:   inspect.Config.WorkingDir,
+		User:         inspect.Config.User,
+		ExposedPorts: inspect.Config.ExposedPorts,
+		Labels:       newLabels,
+	}
+
+	hostConfig := &container.HostConfig{
+		PortBindings:  inspect.HostConfig.PortBindings,
+		Binds:         inspect.HostConfig.Binds,
+		RestartPolicy: inspect.HostConfig.RestartPolicy,
+		NetworkMode:   inspect.HostConfig.NetworkMode,
+		Privileged:    inspect.HostConfig.Privileged,
+		CapAdd:        inspect.HostConfig.CapAdd,
+		CapDrop:       inspect.HostConfig.CapDrop,
+	}
+
+	logger.Debug("RecreateContainerWithLabels: Creating new container", "name", containerName)
+	resp, err := d.client.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
+	if err != nil {
+		logger.Error("RecreateContainerWithLabels: Failed to create container", "name", containerName, "error", err)
+		return fmt.Errorf("failed to create container: %w", err)
+	}
+
+	logger.Info("RecreateContainerWithLabels: Container recreated", "old_id", containerID, "new_id", resp.ID)
+
+	// Start container if it was running before
+	if wasRunning {
+		logger.Debug("RecreateContainerWithLabels: Starting new container", "id", resp.ID)
+		if err := d.StartContainer(ctx, resp.ID); err != nil {
+			logger.Error("RecreateContainerWithLabels: Failed to start container", "id", resp.ID, "error", err)
+			return fmt.Errorf("failed to start container: %w", err)
+		}
+	}
+
+	logger.Info("RecreateContainerWithLabels: Successfully recreated container with labels", "id", resp.ID)
+	return nil
+}
+
 // GetRuntimeName returns "docker"
 func (d *DockerRuntime) GetRuntimeName() string {
 	return "docker"

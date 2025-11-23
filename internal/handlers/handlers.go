@@ -691,13 +691,14 @@ func (h *Handler) UpdateContainerCaddyLabels(c *gin.Context) {
 		labels["caddy.tls"] = DefaultCaddyTLS
 	}
 
-	if err := rt.SetContainerLabels(c.Request.Context(), containerID, labels); err != nil {
-		logger.Error("UpdateContainerCaddyLabels: Failed to update Caddy labels", "id", containerID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// Recreate container with new labels
+	if err := rt.RecreateContainerWithLabels(c.Request.Context(), containerID, labels, nil); err != nil {
+		logger.Error("UpdateContainerCaddyLabels: Failed to recreate container with Caddy labels", "id", containerID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to recreate container with labels: %v", err)})
 		return
 	}
 
-	logger.Info("UpdateContainerCaddyLabels: Successfully updated Caddy labels", "id", containerID)
+	logger.Info("UpdateContainerCaddyLabels: Successfully recreated container with Caddy labels", "id", containerID)
 
 	// Update Caddy configuration
 	if h.caddyService != nil && h.caddyService.IsEnabled() {
@@ -743,13 +744,14 @@ func (h *Handler) DeleteContainerCaddyLabels(c *gin.Context) {
 	// Remove all Caddy labels
 	labelKeys := []string{"caddy.domain", "caddy.port", "caddy.path", "caddy.tls"}
 
-	if err := rt.RemoveContainerLabels(c.Request.Context(), containerID, labelKeys); err != nil {
-		logger.Error("DeleteContainerCaddyLabels: Failed to remove Caddy labels", "id", containerID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// Recreate container without the Caddy labels
+	if err := rt.RecreateContainerWithLabels(c.Request.Context(), containerID, nil, labelKeys); err != nil {
+		logger.Error("DeleteContainerCaddyLabels: Failed to recreate container without Caddy labels", "id", containerID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to recreate container without labels: %v", err)})
 		return
 	}
 
-	logger.Info("DeleteContainerCaddyLabels: Successfully removed Caddy labels", "id", containerID)
+	logger.Info("DeleteContainerCaddyLabels: Successfully recreated container without Caddy labels", "id", containerID)
 
 	// Remove Caddy configuration
 	if h.caddyService != nil && h.caddyService.IsEnabled() {

@@ -64,6 +64,10 @@ type ContainerRuntime interface {
 	// RemoveContainerLabels removes labels from a container
 	RemoveContainerLabels(ctx context.Context, containerID string, labelKeys []string) error
 
+	// RecreateContainerWithLabels recreates a container with updated labels
+	// This is a workaround for the limitation that Docker/Podman don't support updating labels on existing containers
+	RecreateContainerWithLabels(ctx context.Context, containerID string, labels map[string]string, removeLabelKeys []string) error
+
 	// GetRuntimeName returns the name of the runtime ("docker" or "podman")
 	GetRuntimeName() string
 }
