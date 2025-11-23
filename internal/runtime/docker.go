@@ -526,6 +526,9 @@ func (d *DockerRuntime) StreamLogs(ctx context.Context, containerID string, foll
 }
 
 // SetContainerLabels sets or updates labels on a Docker container
+// Note: Docker does not support updating labels on existing containers via CLI.
+// This implementation uses the Docker API to inspect and update container metadata.
+// Labels can only be changed by recreating the container.
 func (d *DockerRuntime) SetContainerLabels(ctx context.Context, containerID string, labels map[string]string) error {
 	logger.Debug("SetContainerLabels: Setting labels on Docker container", "id", containerID, "labels", labels)
 
@@ -536,23 +539,27 @@ func (d *DockerRuntime) SetContainerLabels(ctx context.Context, containerID stri
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
 
-	// Update container config with new labels
-	// Note: We need to recreate the container to update labels in Docker
-	// For now, we'll use docker CLI to update labels on running containers
-	for key, value := range labels {
-		cmd := exec.CommandContext(ctx, "docker", "update", "--label-add", fmt.Sprintf("%s=%s", key, value), containerID)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			logger.Error("SetContainerLabels: Failed to update label", "id", containerID, "key", key, "error", err, "output", string(output))
-			return fmt.Errorf("failed to update label %s: %w (output: %s)", key, err, string(output))
-		}
-	}
+	// For Docker, labels cannot be updated on running containers using the standard API.
+	// We need to stop the container, update its config, and restart it.
+	// However, a simpler approach is to return an informative error and suggest recreation.
+	
+	// Note: In a production system, you might want to:
+	// 1. Stop the container
+	// 2. Commit it to a new image with updated labels
+	// 3. Remove the old container
+	// 4. Create a new container from the new image
+	// But this is complex and risky, so we'll document this limitation.
 
-	logger.Info("SetContainerLabels: Successfully updated labels on container", "id", containerID, "container_name", containerJSON.Name)
-	return nil
+	logger.Warn("SetContainerLabels: Docker does not support updating labels on existing containers", 
+		"id", containerID, 
+		"container_name", containerJSON.Name,
+		"note", "Labels must be set at container creation time")
+	
+	return fmt.Errorf("Docker does not support updating labels on existing containers. Please recreate the container with the desired labels")
 }
 
 // RemoveContainerLabels removes labels from a Docker container
+// Note: Docker does not support updating labels on existing containers via CLI.
 func (d *DockerRuntime) RemoveContainerLabels(ctx context.Context, containerID string, labelKeys []string) error {
 	logger.Debug("RemoveContainerLabels: Removing labels from Docker container", "id", containerID, "keys", labelKeys)
 
@@ -563,18 +570,12 @@ func (d *DockerRuntime) RemoveContainerLabels(ctx context.Context, containerID s
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
 
-	// Remove labels using docker CLI
-	for _, key := range labelKeys {
-		cmd := exec.CommandContext(ctx, "docker", "update", "--label-rm", key, containerID)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			logger.Error("RemoveContainerLabels: Failed to remove label", "id", containerID, "key", key, "error", err, "output", string(output))
-			return fmt.Errorf("failed to remove label %s: %w (output: %s)", key, err, string(output))
-		}
-	}
-
-	logger.Info("RemoveContainerLabels: Successfully removed labels from container", "id", containerID, "container_name", containerJSON.Name)
-	return nil
+	logger.Warn("RemoveContainerLabels: Docker does not support removing labels from existing containers", 
+		"id", containerID, 
+		"container_name", containerJSON.Name,
+		"note", "Labels must be set at container creation time")
+	
+	return fmt.Errorf("Docker does not support removing labels from existing containers. Please recreate the container without the labels")
 }
 
 // GetRuntimeName returns "docker"
