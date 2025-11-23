@@ -11,6 +11,11 @@ services:
       # - /run/podman/podman.sock:/run/podman/podman.sock
       # Mount custom configuration file (optional - remove if using default config)
       # - ./gintainer.yaml:/app/gintainer.yaml
+    # Set user to match the host's docker socket group
+    # Option 1: Use specific GID that matches your docker socket (check with: stat -c '%g' /var/run/docker.sock)
+    # user: "1000:999"  # Replace 999 with your docker socket GID
+    # Option 2: Run as root (less secure but simpler)
+    # user: "0:0"
     environment:
       # Override default port if needed
       - PORT=8080

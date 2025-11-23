@@ -76,8 +76,12 @@ docker run -d \
   - Docker socket: `/var/run/docker.sock` (both host and container)
   - Podman socket: `/run/podman/podman.sock` (host) → `/var/run/docker.sock` (container)
   - Podman's socket is mounted to the Docker socket path because Podman is Docker-API compatible
+- **Socket Permissions**: The container user needs access to the Docker/Podman socket. Solutions:
+  - **Option 1 (Recommended)**: Run with matching GID: `docker run --user "1000:$(stat -c '%g' /var/run/docker.sock)" ...`
+  - **Option 2**: Run as root: `docker run --user "0:0" ...` (less secure)
+  - **Option 3**: Change socket permissions on host: `sudo chmod 666 /var/run/docker.sock` (not recommended for production)
 - **Configuration**: The default `gintainer.yaml` is included in the image. Mount your own configuration file to customize settings
-- **Security**: The container runs as a non-root user (UID 1000) for security
+- **Podman CLI**: The Podman CLI is included in the container image for Podman management
 - **Environment Variables**: You can override settings using environment variables (e.g., `PORT`, `CONFIG_PATH`)
 
 ### Option 2: Build from Source
@@ -95,6 +99,58 @@ go build -o gintainer ./cmd/gintainer
 
 # Run the application
 ./gintainer
+```
+
+## Troubleshooting Docker Deployment
+
+### Permission Denied on Docker Socket
+
+If you see errors like `permission denied while trying to connect to the Docker daemon socket`, the container user doesn't have access to the socket. Try these solutions:
+
+**Solution 1: Run with matching socket GID (Recommended)**
+```bash
+# Find your Docker socket GID
+DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
+
+# Run container with matching GID
+docker run -d \
+  -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --user "1000:${DOCKER_SOCK_GID}" \
+  --name gintainer \
+  gintainer
+
+# Or with docker-compose, add to the service:
+# user: "1000:999"  # Replace 999 with your socket GID
+```
+
+**Solution 2: Run as root (simpler but less secure)**
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --user "0:0" \
+  --name gintainer \
+  gintainer
+```
+
+**Solution 3: Make socket accessible (development only)**
+```bash
+sudo chmod 666 /var/run/docker.sock
+```
+
+### Podman Not Found
+
+If using Podman to run the container and you see `podman not found in PATH`, the Podman CLI is included in the image but requires proper socket mounting:
+
+```bash
+# For Podman socket support
+podman run -d \
+  -p 8080:8080 \
+  -v /run/podman/podman.sock:/var/run/docker.sock \
+  --user "1000:$(stat -c '%g' /run/podman/podman.sock)" \
+  --name gintainer \
+  gintainer
 ```
 
 ## Usage

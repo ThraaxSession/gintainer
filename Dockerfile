@@ -22,12 +22,14 @@ RUN go build -ldflags="-s -w" -o gintainer ./cmd/gintainer
 # Runtime stage
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS connections
-RUN apk add --no-cache ca-certificates
+# Install ca-certificates for HTTPS connections and podman for Podman support
+RUN apk add --no-cache ca-certificates podman
 
-# Create a non-root user
+# Create a non-root user and add to root group for Docker socket access
+# Note: The root group (GID 0) typically has access to /var/run/docker.sock
 RUN addgroup -g 1000 gintainer && \
-    adduser -D -u 1000 -G gintainer gintainer
+    adduser -D -u 1000 -G gintainer gintainer && \
+    addgroup gintainer root
 
 # Set working directory
 WORKDIR /app
