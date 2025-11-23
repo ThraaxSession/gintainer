@@ -53,7 +53,7 @@ jobs:
         fi
         
     - name: Run tests
-      run: CGO_ENABLED=0 go test -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      run: CGO_ENABLED=0 go test -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -v -coverprofile=coverage.txt -covermode=set ./...
       
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
