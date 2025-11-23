@@ -53,31 +53,45 @@ func (h *Handler) ListContainers(c *gin.Context) {
 
 	// Query specified runtime(s)
 	if filters.Runtime == "all" {
+		logger.Debug("ListContainers: Querying all available runtimes")
 		// Query all runtimes
-		for _, rt := range h.runtimeManager.GetAllRuntimes() {
+		runtimes := h.runtimeManager.GetAllRuntimes()
+		logger.Debug("ListContainers: Available runtimes", "count", len(runtimes))
+
+		for name, rt := range runtimes {
+			logger.Debug("ListContainers: Querying runtime", "name", name)
 			containers, err := rt.ListContainers(c.Request.Context(), filters)
 			if err != nil {
 				// Log error but continue with other runtimes
-				logger.Warn("ListContainers: Error querying runtime", "error", err)
+				logger.Warn("ListContainers: Error querying runtime", "name", name, "error", err)
 				continue
 			}
+			logger.Debug("ListContainers: Runtime returned containers", "name", name, "count", len(containers))
 			allContainers = append(allContainers, containers...)
 		}
 	} else {
+		logger.Debug("ListContainers: Querying specific runtime", "runtime", filters.Runtime)
 		// Query specific runtime
 		rt, ok := h.runtimeManager.GetRuntime(filters.Runtime)
 		if !ok {
-			logger.Error("ListContainers: Invalid runtime specified", "filter1", filters.Runtime)
+			// Get list of available runtime names
+			availableNames := []string{}
+			for name := range h.runtimeManager.GetAllRuntimes() {
+				availableNames = append(availableNames, name)
+			}
+			logger.Error("ListContainers: Invalid runtime specified", "runtime", filters.Runtime, "available", availableNames)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid runtime"})
 			return
 		}
 
+		logger.Debug("ListContainers: Found runtime, listing containers")
 		containers, err := rt.ListContainers(c.Request.Context(), filters)
 		if err != nil {
-			logger.Error("ListContainers: Failed to list containers", "error", err)
+			logger.Error("ListContainers: Failed to list containers", "runtime", filters.Runtime, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		logger.Debug("ListContainers: Runtime returned containers", "count", len(containers))
 		allContainers = containers
 	}
 

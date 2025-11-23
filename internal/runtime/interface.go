@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/ThraaxSession/gintainer/internal/logger"
 	"github.com/ThraaxSession/gintainer/internal/models"
 )
 
@@ -75,16 +76,34 @@ func NewManager() *Manager {
 
 // RegisterRuntime registers a container runtime
 func (m *Manager) RegisterRuntime(name string, runtime ContainerRuntime) {
+	logger.Debug("RuntimeManager: Registering runtime", "name", name)
 	m.runtimes[name] = runtime
+	logger.Info("RuntimeManager: Runtime registered successfully", "name", name, "total_runtimes", len(m.runtimes))
 }
 
 // GetRuntime returns a runtime by name
 func (m *Manager) GetRuntime(name string) (ContainerRuntime, bool) {
+	logger.Debug("RuntimeManager: Looking up runtime", "name", name)
 	runtime, ok := m.runtimes[name]
+	if !ok {
+		logger.Warn("RuntimeManager: Runtime not found", "name", name, "available_runtimes", m.getRuntimeNames())
+	} else {
+		logger.Debug("RuntimeManager: Runtime found", "name", name)
+	}
 	return runtime, ok
 }
 
 // GetAllRuntimes returns all registered runtimes
 func (m *Manager) GetAllRuntimes() map[string]ContainerRuntime {
+	logger.Debug("RuntimeManager: Getting all runtimes", "count", len(m.runtimes))
 	return m.runtimes
+}
+
+// getRuntimeNames returns a list of registered runtime names for logging
+func (m *Manager) getRuntimeNames() []string {
+	names := make([]string, 0, len(m.runtimes))
+	for name := range m.runtimes {
+		names = append(names, name)
+	}
+	return names
 }

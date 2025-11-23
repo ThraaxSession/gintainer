@@ -30,10 +30,47 @@ type DockerRuntime struct {
 
 // NewDockerRuntime creates a new Docker runtime
 func NewDockerRuntime() (*DockerRuntime, error) {
+	logger.Debug("NewDockerRuntime: Starting Docker runtime initialization")
+
+	// Log environment variables that affect Docker client
+	dockerHost := os.Getenv("DOCKER_HOST")
+	if dockerHost != "" {
+		logger.Debug("NewDockerRuntime: DOCKER_HOST environment variable set", "host", dockerHost)
+	} else {
+		// Default socket path when DOCKER_HOST is not set
+		defaultSocket := "/var/run/docker.sock"
+		if fileInfo, err := os.Stat(defaultSocket); err == nil {
+			logger.Debug("NewDockerRuntime: Default Docker socket found",
+				"socket", defaultSocket,
+				"mode", fileInfo.Mode().String(),
+				"size", fileInfo.Size())
+		} else {
+			logger.Debug("NewDockerRuntime: Default Docker socket not accessible",
+				"socket", defaultSocket,
+				"error", err)
+		}
+	}
+
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
+		logger.Error("NewDockerRuntime: Failed to create Docker client", "error", err)
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
+
+	// Try to ping the Docker daemon to verify connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	logger.Debug("NewDockerRuntime: Pinging Docker daemon to verify connection")
+	if pingResp, err := cli.Ping(ctx); err != nil {
+		logger.Warn("NewDockerRuntime: Docker client created but ping failed", "error", err)
+	} else {
+		logger.Debug("NewDockerRuntime: Successfully pinged Docker daemon",
+			"api_version", pingResp.APIVersion,
+			"os_type", pingResp.OSType)
+	}
+
+	logger.Info("NewDockerRuntime: Docker runtime initialized successfully")
 	return &DockerRuntime{client: cli}, nil
 }
 

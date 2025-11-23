@@ -28,14 +28,25 @@ func main() {
 
 	cfg := configManager.GetConfig()
 
+	// Set logger level based on config mode
+	if cfg.Server.Mode == "debug" {
+		logger.SetLevel(logger.DebugLevel)
+		logger.Info("Logger level set to DEBUG")
+	} else {
+		logger.SetLevel(logger.InfoLevel)
+		logger.Info("Logger level set to INFO")
+	}
+
 	// Set Gin mode from config
 	gin.SetMode(cfg.Server.Mode)
 
 	// Initialize runtime manager
 	runtimeManager := runtime.NewManager()
+	logger.Debug("Main: Runtime manager created")
 
 	// Initialize Docker runtime if enabled
 	if cfg.Docker.Enabled {
+		logger.Debug("Main: Docker runtime is enabled in config, attempting to initialize")
 		dockerRuntime, err := runtime.NewDockerRuntime()
 		if err != nil {
 			logger.Printf("Warning: Failed to initialize Docker runtime: %v", err)
@@ -43,10 +54,13 @@ func main() {
 			runtimeManager.RegisterRuntime("docker", dockerRuntime)
 			logger.Println("Docker runtime initialized")
 		}
+	} else {
+		logger.Debug("Main: Docker runtime is disabled in config")
 	}
 
 	// Initialize Podman runtime if enabled
 	if cfg.Podman.Enabled {
+		logger.Debug("Main: Podman runtime is enabled in config, attempting to initialize")
 		podmanRuntime, err := runtime.NewPodmanRuntime()
 		if err != nil {
 			logger.Printf("Warning: Failed to initialize Podman runtime: %v", err)
@@ -54,10 +68,14 @@ func main() {
 			runtimeManager.RegisterRuntime("podman", podmanRuntime)
 			logger.Println("Podman runtime initialized")
 		}
+	} else {
+		logger.Debug("Main: Podman runtime is disabled in config")
 	}
 
 	// Check if at least one runtime is available
-	if len(runtimeManager.GetAllRuntimes()) == 0 {
+	availableRuntimes := runtimeManager.GetAllRuntimes()
+	logger.Debug("Main: Runtime initialization complete", "available_count", len(availableRuntimes))
+	if len(availableRuntimes) == 0 {
 		logger.Fatal("No container runtime available. Please install Docker or Podman.")
 	}
 

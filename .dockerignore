@@ -1,0 +1,40 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Documentation
+*.md
+CADDY_GUIDE.md
+EXAMPLES.md
+FEATURES.md
+IMPLEMENTATION.md
+QUICKSTART.md
+
+# Build artifacts
+/gintainer
+/cmd/gintainer/gintainer
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Go workspace
+go.work
+go.work.sum
+
+# Environment files
+.env
+
+# IDE
+.idea
+.vscode
+
+# License (keep in image)
+!LICENSE

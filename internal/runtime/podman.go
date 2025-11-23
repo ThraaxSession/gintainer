@@ -33,13 +33,28 @@ type PodmanRuntime struct {
 
 // NewPodmanRuntime creates a new Podman runtime using the Golang Bindings
 func NewPodmanRuntime() (*PodmanRuntime, error) {
+	logger.Debug("NewPodmanRuntime: Starting Podman runtime initialization")
+
 	// Connect to Podman socket (unix socket by default)
 	// Try different socket locations
 	socketPaths := []string{
 		"unix:///run/podman/podman.sock",
 		"unix:///var/run/podman/podman.sock",
 		fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid()),
+		"unix:///var/run/docker.sock", // For containerized environments where Podman socket is mounted here
 	}
+
+	// Check if custom socket path is specified via environment variable
+	if customSocket := os.Getenv("PODMAN_SOCKET"); customSocket != "" {
+		logger.Debug("NewPodmanRuntime: Custom socket path specified via PODMAN_SOCKET", "socket", customSocket)
+		// Prepend custom socket to try it first
+		if !strings.HasPrefix(customSocket, "unix://") {
+			customSocket = "unix://" + customSocket
+		}
+		socketPaths = append([]string{customSocket}, socketPaths...)
+	}
+
+	logger.Debug("NewPodmanRuntime: Will attempt to connect to sockets", "paths", socketPaths)
 
 	var connCtx context.Context
 	var lastErr error
@@ -48,33 +63,65 @@ func NewPodmanRuntime() (*PodmanRuntime, error) {
 	// The context will be managed by the individual operations
 	baseCtx := context.Background()
 
-	for _, socketPath := range socketPaths {
+	for i, socketPath := range socketPaths {
+		// Extract actual file path from unix:// prefix for stat check
+		filePath := strings.TrimPrefix(socketPath, "unix://")
+
+		// Check if socket file exists and get permissions info
+		if fileInfo, err := os.Stat(filePath); err == nil {
+			logger.Debug("NewPodmanRuntime: Socket file found",
+				"attempt", i+1,
+				"socket", socketPath,
+				"mode", fileInfo.Mode().String(),
+				"size", fileInfo.Size())
+		} else {
+			logger.Debug("NewPodmanRuntime: Socket file not accessible",
+				"attempt", i+1,
+				"socket", socketPath,
+				"error", err)
+		}
+
+		logger.Debug("NewPodmanRuntime: Attempting connection", "attempt", i+1, "socket", socketPath)
 		ctx, err := bindings.NewConnection(baseCtx, socketPath)
 		if err == nil {
 			connCtx = ctx
+			logger.Info("NewPodmanRuntime: Successfully connected to Podman socket", "socket", socketPath)
 			break
 		}
+		logger.Debug("NewPodmanRuntime: Failed to connect", "socket", socketPath, "error", err)
 		lastErr = err
 	}
 
 	if connCtx == nil {
+		logger.Debug("NewPodmanRuntime: All socket connections failed, checking for podman CLI")
 		// Fallback: try to check if podman command is available
 		if _, err := exec.LookPath("podman"); err != nil {
+			logger.Error("NewPodmanRuntime: Podman CLI not found in PATH", "error", err)
 			return nil, fmt.Errorf("podman not found in PATH and unable to connect to Podman socket: %w", lastErr)
 		}
+		logger.Debug("NewPodmanRuntime: Podman CLI found, retrying default socket")
 		// If podman command exists, try default socket one more time
 		ctx, err := bindings.NewConnection(baseCtx, "unix:///run/podman/podman.sock")
 		if err != nil {
+			logger.Error("NewPodmanRuntime: Final connection attempt failed", "error", err)
 			return nil, fmt.Errorf("unable to connect to Podman socket: %w", err)
 		}
 		connCtx = ctx
+		logger.Info("NewPodmanRuntime: Connected to default socket after finding Podman CLI")
 	}
 
+	logger.Info("NewPodmanRuntime: Podman runtime initialized successfully")
 	return &PodmanRuntime{connCtx: connCtx}, nil
 }
 
 // ListContainers lists all Podman containers
 func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.FilterOptions) ([]models.ContainerInfo, error) {
+	logger.Debug("PodmanRuntime.ListContainers: Starting container list",
+		"name_filter", filterOpts.Name,
+		"status_filter", filterOpts.Status,
+		"include_stats", filterOpts.IncludeStats,
+		"include_privileged", filterOpts.IncludePrivileged)
+
 	// Prepare list options
 	listOpts := new(containers.ListOptions).WithAll(true)
 
@@ -87,14 +134,20 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		filters["status"] = []string{filterOpts.Status}
 	}
 	if len(filters) > 0 {
+		logger.Debug("PodmanRuntime.ListContainers: Applying filters", "filters", filters)
 		listOpts.WithFilters(filters)
+	} else {
+		logger.Debug("PodmanRuntime.ListContainers: No filters applied, listing all containers")
 	}
 
 	// List containers using bindings
 	podmanContainers, err := containers.List(p.connCtx, listOpts)
 	if err != nil {
+		logger.Error("PodmanRuntime.ListContainers: Failed to list containers", "error", err)
 		return nil, fmt.Errorf("failed to list Podman containers: %w", err)
 	}
+
+	logger.Debug("PodmanRuntime.ListContainers: Retrieved containers from Podman API", "count", len(podmanContainers))
 
 	// Convert to common ContainerInfo format
 	containerInfos := make([]models.ContainerInfo, 0, len(podmanContainers))
@@ -142,46 +195,68 @@ func (p *PodmanRuntime) ListContainers(ctx context.Context, filterOpts models.Fi
 		if filterOpts.IncludeStats && containerInfos[i].State == "running" {
 			// Get stats for running containers using the stats command (bindings don't provide direct stats API in a simple way)
 			// We'll use the CLI approach for stats as the bindings Stats API is streaming-based
+			logger.Debug("PodmanRuntime.ListContainers: Getting stats for container", "id", containerInfos[i].ID, "name", containerInfos[i].Name)
 			statsCmd := exec.CommandContext(ctx, "podman", "stats", "--no-stream", "--format", "json", containerInfos[i].ID)
-			if statsOut, err := statsCmd.Output(); err == nil && len(statsOut) > 0 {
-				var podmanStats []struct {
-					ID            string `json:"id"`
-					Name          string `json:"name"`
-					CPUPercentage string `json:"cpu_percent"`
-					MemUsage      string `json:"mem_usage"`
-					MemPercentage string `json:"mem_percent"`
-					NetIO         string `json:"net_io"`
-					BlockIO       string `json:"block_io"`
-					PIDs          string `json:"pids"`
-				}
-				if err := json.Unmarshal(statsOut, &podmanStats); err == nil && len(podmanStats) > 0 {
-					// Parse CPU percentage (format: "0.50%")
-					cpuStr := strings.TrimSuffix(podmanStats[0].CPUPercentage, "%")
-					cpuPerc, _ := strconv.ParseFloat(cpuStr, 64)
-
-					// Parse memory usage (format: "100MB / 8GB")
-					memParts := strings.Split(podmanStats[0].MemUsage, " / ")
-					var memUsage, memLimit uint64
-					if len(memParts) == 2 {
-						memUsage = parseSize(strings.TrimSpace(memParts[0]))
-						memLimit = parseSize(strings.TrimSpace(memParts[1]))
-					}
-
-					// Parse memory percentage (format: "1.25%")
-					memPercStr := strings.TrimSuffix(podmanStats[0].MemPercentage, "%")
-					memPerc, _ := strconv.ParseFloat(memPercStr, 64)
-
-					containerInfos[i].Stats = &models.ContainerStats{
-						CPUPercent:    cpuPerc,
-						MemoryUsage:   memUsage,
-						MemoryLimit:   memLimit,
-						MemoryPercent: memPerc,
-					}
-				}
+			statsOut, err := statsCmd.Output()
+			if err != nil {
+				logger.Debug("PodmanRuntime.ListContainers: Failed to get stats via CLI", "id", containerInfos[i].ID, "error", err)
+				// Try to get stats using the bindings API as fallback
+				// Note: This requires the statsReport to be available but may work in some environments
+				continue
 			}
+
+			if len(statsOut) == 0 {
+				logger.Debug("PodmanRuntime.ListContainers: Empty stats output", "id", containerInfos[i].ID)
+				continue
+			}
+
+			var podmanStats []struct {
+				ID            string `json:"id"`
+				Name          string `json:"name"`
+				CPUPercentage string `json:"cpu_percent"`
+				MemUsage      string `json:"mem_usage"`
+				MemPercentage string `json:"mem_percent"`
+				NetIO         string `json:"net_io"`
+				BlockIO       string `json:"block_io"`
+				PIDs          string `json:"pids"`
+			}
+			if err := json.Unmarshal(statsOut, &podmanStats); err != nil {
+				logger.Debug("PodmanRuntime.ListContainers: Failed to unmarshal stats", "id", containerInfos[i].ID, "error", err)
+				continue
+			}
+
+			if len(podmanStats) == 0 {
+				logger.Debug("PodmanRuntime.ListContainers: No stats in response", "id", containerInfos[i].ID)
+				continue
+			}
+
+			// Parse CPU percentage (format: "0.50%")
+			cpuStr := strings.TrimSuffix(podmanStats[0].CPUPercentage, "%")
+			cpuPerc, _ := strconv.ParseFloat(cpuStr, 64)
+
+			// Parse memory usage (format: "100MB / 8GB")
+			memParts := strings.Split(podmanStats[0].MemUsage, " / ")
+			var memUsage, memLimit uint64
+			if len(memParts) == 2 {
+				memUsage = parseSize(strings.TrimSpace(memParts[0]))
+				memLimit = parseSize(strings.TrimSpace(memParts[1]))
+			}
+
+			// Parse memory percentage (format: "1.25%")
+			memPercStr := strings.TrimSuffix(podmanStats[0].MemPercentage, "%")
+			memPerc, _ := strconv.ParseFloat(memPercStr, 64)
+
+			containerInfos[i].Stats = &models.ContainerStats{
+				CPUPercent:    cpuPerc,
+				MemoryUsage:   memUsage,
+				MemoryLimit:   memLimit,
+				MemoryPercent: memPerc,
+			}
+			logger.Debug("PodmanRuntime.ListContainers: Stats retrieved", "id", containerInfos[i].ID, "cpu", cpuPerc, "mem_percent", memPerc)
 		}
 	}
 
+	logger.Info("PodmanRuntime.ListContainers: Returning containers", "count", len(containerInfos))
 	return containerInfos, nil
 }
 
