@@ -107,11 +107,11 @@ func NewManager(filePath string) (*Manager, error) {
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Port: "8080",
-			Mode: "debug",
+			Port: "10000",
+			Mode: "release",
 		},
 		Scheduler: SchedulerConfig{
-			Enabled:  false,
+			Enabled:  true,
 			Schedule: "0 2 * * *",
 			Filters:  []string{},
 		},
@@ -131,11 +131,11 @@ func DefaultConfig() *Config {
 		},
 		UI: UIConfig{
 			Title:       "Gintainer",
-			Description: "Container & Pod Management",
+			Description: "A Golang application built with the Gin framework for managing containers and pods from both Docker and Podman.",
 			Theme:       "light",
 		},
 		Deployment: DeploymentConfig{
-			BasePath: "./deployments",
+			BasePath: "./compose-deployments",
 		},
 	}
 }

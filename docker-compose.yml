@@ -4,11 +4,11 @@ services:
       context: .
       args:
         # Set to "true" to include Podman CLI (increases image size ~100MB)
-        INSTALL_PODMAN: "false"
+        INSTALL_PODMAN: "true"
     container_name: gintainer
     privileged: true
     ports:
-      - "10000:8080"
+      - "10000:10000"
     volumes:
       # Mount Docker socket for Docker container management
       - /var/run/docker.sock:/var/run/docker.sock
