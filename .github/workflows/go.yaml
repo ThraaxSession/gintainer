@@ -42,7 +42,7 @@ jobs:
       run: go mod verify
       
     - name: Run go vet
-      run: go vet ./...
+      run: CGO_ENABLED=0 go vet -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" ./...
       
     - name: Run go fmt check
       run: |
@@ -53,7 +53,7 @@ jobs:
         fi
         
     - name: Run tests
-      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      run: CGO_ENABLED=0 go test -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -v -race -coverprofile=coverage.txt -covermode=atomic ./...
       
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
@@ -65,17 +65,17 @@ jobs:
         
     - name: Build for Linux
       run: |
-        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o gintainer-linux-amd64 ./cmd/gintainer
-        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o gintainer-linux-arm64 ./cmd/gintainer
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -ldflags="-s -w" -o gintainer-linux-amd64 ./cmd/gintainer
+        CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -ldflags="-s -w" -o gintainer-linux-arm64 ./cmd/gintainer
         
     - name: Build for macOS
       run: |
-        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o gintainer-darwin-amd64 ./cmd/gintainer
-        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o gintainer-darwin-arm64 ./cmd/gintainer
+        CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -ldflags="-s -w" -o gintainer-darwin-amd64 ./cmd/gintainer
+        CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -ldflags="-s -w" -o gintainer-darwin-arm64 ./cmd/gintainer
         
     - name: Build for Windows
       run: |
-        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o gintainer-windows-amd64.exe ./cmd/gintainer
+        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -ldflags="-s -w" -o gintainer-windows-amd64.exe ./cmd/gintainer
         
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
